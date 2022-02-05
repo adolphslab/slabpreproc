@@ -45,61 +45,49 @@ import nipype.interfaces.afni as afni
 import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
-import argparser
+import argparse
 
 def main():
 
-    # Processing setup
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Lightweight subcortical fMRI quality control')
+    parser.add_argument('-d', '--dir', default='.', help='BIDS dataset directory')
+    parser.add_argument('--sub', default='', help='Subject ID')
+    parser.add_argument('--ses', default='', help='Session ID')
+    parser.add_argument('--task', default='', help='Task ID')
 
-    # Acceleration parameters (slice grappa (M) x in-plane grappa (R))
-    accel = 'm4r2'
-
-    # BIDS metadata
-    bids_subj = 'Damy001'
-    bids_sess = '20220120'
-    bids_task = 'rest'
-    bids_acq = f'wb2p0{accel}'
-
-    # Key directories
-    bids_dir = op.realpath("/Users/jmt/Data/DenseAmygdala/Piloting/2022-01-20")
+    # Parse command line arguments
+    args = parser.parse_args()
+    bids_dir = os.path.realpath(args.dir)
+    subj_id = args.sub
+    sess_id = args.ses
+    task_id = args.task
 
     # Get image filenames from BIDS tree
-    func_source = io.BIDSDataGrabber(
+    ds = io.BIDSDataGrabber(
         name='datasource',
         base_dir=bids_dir,
-        subject=bids_subj,
-        session=bids_sess,
+        subject=subj_id,
+        session=sess_id,
         output_query={
-            'bold': dict(task=bids_task, acquisition=bids_acq, part='mag', suffix='bold', extension='.nii.gz'),
-            'sbref': dict(acquisition=bids_acq, part='mag', suffix='sbref', extension='.nii.gz'),
-            'seepi': dict(acquisition=bids_acq, suffix='epi', extension='.nii.gz')
+            'bold': dict(task=task_id, part='mag', suffix='bold', extension='.nii.gz'),
+            'sbref': dict(part='mag', suffix='sbref', extension='.nii.gz'),
+            'seepi': dict(suffix='epi', extension='.nii.gz'),
+            't1w': dict(suffix='T1w', extension='.nii.gz')
         }
     )
-    images = func_source.run()
+
+    images = ds.run()
 
     # Fill input parameters for workflow
     bold_fname = images.outputs.bold[0]
     seepi_fname = images.outputs.seepi
     sbref_fname = images.outputs.sbref[0]
     mocoref_fname = seepi_fname[0]
-
-    # Grab T1w structural from session 2021-12-21
-    anat_source = io.BIDSDataGrabber(
-        name='anat_source',
-        base_dir='/Users/jmt/Data/DenseAmygdala/Piloting/2021-12-21',
-        subject=bids_subj,
-        session='20211221',
-        output_query={
-            't1': dict(acquisition='rms', run=2, suffix='T1w', extension='.nii.gz'),
-        }
-    )
-    images = anat_source.run()
-
-    # Fill input parameters for workflow
-    anat_fname = images.outputs.t1[0]
-
+    anat_fname = images.outputs.t1w[0]
 
     # Create TOPUP encoding files for SEEPI and SBREF
+    # TODO: pull from BIDS metadata for SEEPI pair
     seepi_enc_fname = op.realpath(f"seepi_{accel}_encoding.txt")
     seepi_etl = 0.0293706
     seepi_enc_mat = np.array([
@@ -109,6 +97,7 @@ def main():
     np.savetxt(seepi_enc_fname, seepi_enc_mat, fmt="%2d %2d %2d %9.6f")
 
     # Create TOPUP encoding file for SBRef images
+    # TODO: Pull from BIDS metadata for SBRef
     sbref_enc_fname = op.realpath(f"sbref_{accel}_encoding.txt")
     sbref_etl = 0.0293706
     sbref_enc_mat = np.array([
