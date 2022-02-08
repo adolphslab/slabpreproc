@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import nipype.interfaces.io as io
+import numpy as np
 import nipype.interfaces.utility as util
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.afni as afni
-import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
-def build_qc_wf():
+def build_qc_wf(TR_s):
 
     # QC inputs
     qc_inputs = pe.Node(
@@ -18,7 +17,19 @@ def build_qc_wf():
         name='qc_inputs'
     )
 
-    # Temporal SD
+    # Convert 100 s to volumes
+    n_vol_100 = np.round(100.0 / TR_s)
+
+    # High pass filter to remove slow trends and baseline
+    bold_hpf = pe.Node(
+        fsl.ImageMaths(
+            op_string=f'-bptf {n_vol_100} -1',
+            out_file='bold_hpf.nii.gz'
+        ),
+        name='bold_hpf'
+    )
+
+    # Temporal mean
     bold_tmean = pe.Node(
         afni.TStat(
             args='-mean',
@@ -27,10 +38,10 @@ def build_qc_wf():
         name='bold_tmean'
     )
 
-    # Temporal SD (AFNI demeans and linear detrends prior to calculated tSD)
+    # Temporal SD without linear detrending
     bold_tsd = pe.Node(
         afni.TStat(
-            args='-stdev',
+            args='-stdevNOD',
             out_file='bold_tsd.nii.gz'
         ),
         name='bold_tsd'
@@ -57,7 +68,8 @@ def build_qc_wf():
 
     qc_wf.connect([
         (qc_inputs, bold_tmean, [('bold', 'in_file')]),
-        (qc_inputs, bold_tsd, [('bold', 'in_file')]),
+        (qc_inputs, bold_hpf, [('bold', 'in_file')]),
+        (bold_hpf, bold_tsd, [('out_file', 'in_file')]),
         (bold_tmean, bold_tsfnr, [('out_file', 'in_file')]),
         (bold_tsd, bold_tsfnr, [('out_file', 'in_file2')]),
         (bold_tsfnr, qc_outputs, [('out_file', 'tsfnr')])

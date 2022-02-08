@@ -32,97 +32,111 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
-
+import os
 import os.path as op
 import numpy as np
-
-from glob import glob
+import pkg_resources
 
 import nipype.interfaces.io as io
 import nipype.interfaces.utility as util 
-import nipype.interfaces.fsl as fsl
-import nipype.interfaces.afni as afni
-import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
+from utils import (get_topup_pars, get_TR)
+from qc_workflow import build_qc_wf
+from func_preproc_wf import build_func_preproc_wf
+from atlas_wf import build_atlas_wf
+
 import argparse
+
 
 def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Lightweight subcortical fMRI quality control')
-    parser.add_argument('-d', '--dir', default='.', help='BIDS dataset directory')
-    parser.add_argument('--sub', default='', help='Subject ID')
-    parser.add_argument('--ses', default='', help='Session ID')
-    parser.add_argument('--task', default='', help='Task ID')
+    parser.add_argument('-b', '--bold', default='bold.nii.gz', help='4D BOLD Nifti filename')
+    parser.add_argument('-sb', '--sbref', default='sbref.nii.gz', help='3D BOLD Nifti filename')
+    parser.add_argument('-ap', '--apfmap', default='ap.nii.gz', help='3D AP SE-EPI Nifti filename')
+    parser.add_argument('-pa', '--pafmap', default='pa.nii.gz', help='3D PA SE-EPI Nifti filename')
+    parser.add_argument('-t1', '--t1w', default='t1w.nii.gz', help='3D T1w Nifti filename')
 
     # Parse command line arguments
     args = parser.parse_args()
-    bids_dir = os.path.realpath(args.dir)
-    subj_id = args.sub
-    sess_id = args.ses
-    task_id = args.task
+    bold_fname = op.realpath(args.bold)
+    sbref_fname = op.realpath(args.sbref)
+    ap_fname = op.realpath(args.apfmap)
+    pa_fname = op.realpath(args.pafmap)
+    t1_fname = op.realpath(args.t1w)
 
-    # Get image filenames from BIDS tree
-    ds = io.BIDSDataGrabber(
-        name='datasource',
-        base_dir=bids_dir,
-        subject=subj_id,
-        session=sess_id,
-        output_query={
-            'bold': dict(task=task_id, part='mag', suffix='bold', extension='.nii.gz'),
-            'sbref': dict(part='mag', suffix='sbref', extension='.nii.gz'),
-            'seepi': dict(suffix='epi', extension='.nii.gz'),
-            't1w': dict(suffix='T1w', extension='.nii.gz')
-        }
+    base_dir = op.dirname(bold_fname)
+    out_dir = op.join(base_dir, 'output')
+    work_dir = op.join(base_dir, 'work')
+
+    if not op.isdir(work_dir):
+        os.makedirs(work_dir)
+
+    # Get atlas T1 template and labels filenames
+    atlas_t1_fname = pkg_resources.resource_filename(
+        'scqc',
+        'atlas/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz'
+    )
+    atlas_labels_fname = pkg_resources.resource_filename(
+        'scqc',
+        'atlas/tpl-MNI152NLin2009cAsym_res-02_atlas-HOSPA_desc-th25_dseg.nii.gz'
+    )
+    atlas_brain_fname = pkg_resources.resource_filename(
+        'scqc',
+        'atlas/tpl-MNI152NLin2009cAsym_res-02_desc-brain_probseg.nii.gz'
     )
 
-    images = ds.run()
+    print('Subcortical Quality Control')
+    print(f'BOLD image  : {bold_fname}')
+    print(f'SBRef image : {sbref_fname}')
+    print(f'AP SE-EPI   : {ap_fname}')
+    print(f'PA SE-EPI   : {pa_fname}')
+    print(f'T1w image   : {t1_fname}')
+    print(f'Output dir  : {out_dir}')
+    print(f'Work dir    : {work_dir}')
 
-    # Fill input parameters for workflow
-    bold_fname = images.outputs.bold[0]
-    seepi_fname = images.outputs.seepi
-    sbref_fname = images.outputs.sbref[0]
-    mocoref_fname = seepi_fname[0]
-    anat_fname = images.outputs.t1w[0]
+    # Additional workflow arguments
+    seepi_fname = [ap_fname, pa_fname]
+    mocoref_fname = ap_fname
 
-    # Create TOPUP encoding files for SEEPI and SBREF
-    # TODO: pull from BIDS metadata for SEEPI pair
-    seepi_enc_fname = op.realpath(f"seepi_{accel}_encoding.txt")
-    seepi_etl = 0.0293706
-    seepi_enc_mat = np.array([
-        [0, 1, 0, seepi_etl],
-        [0, -1, 0, seepi_etl]
-    ])
-    np.savetxt(seepi_enc_fname, seepi_enc_mat, fmt="%2d %2d %2d %9.6f")
+    # Get TOPUP metadata from JSON sidecars and save to working directory
+    seepi_etl, seepi_enc_mat = get_topup_pars(ap_fname)
+    seepi_enc_fname = op.join(work_dir, 'seepi_enc.txt')
+    if not op.isfile(seepi_enc_fname):
+        np.savetxt(seepi_enc_fname, seepi_enc_mat, fmt="%2d %2d %2d %9.6f")
 
-    # Create TOPUP encoding file for SBRef images
-    # TODO: Pull from BIDS metadata for SBRef
-    sbref_enc_fname = op.realpath(f"sbref_{accel}_encoding.txt")
-    sbref_etl = 0.0293706
-    sbref_enc_mat = np.array([
-        [0, 1, 0, sbref_etl]
-    ])
-    np.savetxt(sbref_enc_fname, sbref_enc_mat, fmt="%2d %2d %2d %9.6f")
+    sbref_etl, sbref_enc_mat = get_topup_pars(sbref_fname)
+    sbref_enc_fname = op.join(work_dir, 'sbref_enc.txt')
+    if not op.isfile(sbref_enc_fname):
+        np.savetxt(sbref_enc_fname, sbref_enc_mat, fmt="%2d %2d %2d %9.6f")
+
+    # Get TR from BOLD JSON sidecar
+    TR_s = get_TR(bold_fname)
+
+    # Build main workflow
+    main_wf = build_main_wf(work_dir, out_dir, seepi_enc_fname, sbref_enc_fname, TR_s)
 
     # Pass image filenames to main workflow
     main_wf.inputs.main_inputs.bold = bold_fname
     main_wf.inputs.main_inputs.seepi = seepi_fname
     main_wf.inputs.main_inputs.sbref = sbref_fname
     main_wf.inputs.main_inputs.mocoref = mocoref_fname
-    main_wf.inputs.main_inputs.anat = anat_fname
-
-    main_wf = build_main_wf()
+    main_wf.inputs.main_inputs.ind_t1 = t1_fname
+    main_wf.inputs.main_inputs.atlas_labels = atlas_labels_fname
+    main_wf.inputs.main_inputs.atlas_t1 = atlas_t1_fname
 
     # Run main workflow
     main_wf.run()
 
 
-def build_main_wf():
+def build_main_wf(work_dir, out_dir, seepi_enc_fname, sbref_enc_fname, TR_s):
 
     main_wf = pe.Workflow(
-        base_dir=op.realpath('./work'),
-        name='main_wf')
+        base_dir=op.realpath(work_dir),
+        name='main_wf'
+    )
 
     # Input nodes
     main_inputs = pe.Node(
@@ -134,26 +148,30 @@ def build_main_wf():
     # Output datasink
     main_outputs = pe.Node(
         io.DataSink(
-            base_directory = op.realpath('./output')
+            base_directory=op.realpath(out_dir)
         ),
         name='main_outputs'
     )
 
+    # Build sub workflows
+    func_preproc_wf = build_func_preproc_wf(seepi_enc_fname, sbref_enc_fname)
+    atlas_wf = build_atlas_wf()
+    qc_wf = build_qc_wf(TR_s)
+
     main_wf.connect([
-        (main_inputs, preproc_wf, [
+        (main_inputs, func_preproc_wf, [
             ('bold', 'preproc_inputs.bold'),
             ('sbref', 'preproc_inputs.sbref'),
             ('seepi', 'preproc_inputs.seepi'),
             ('mocoref', 'preproc_inputs.mocoref'),
-            ('anat', 'preproc_inputs.anat')
         ]),
-        (preproc_wf, qc_wf, [
+        (func_preproc_wf, atlas_wf, [('preproc_outputs.sbref', 'atlas_inputs.ind_epi')])
+        (main_inputs, atlas_wf, [('', 'atlas_inputs.ind_epi')])
+        (func_preproc_wf, qc_wf, [
             ('preproc_outputs.bold', 'qc_inputs.bold'),
-            ('preproc_outputs.anat', 'qc_inputs.anat'),
         ]),
-        (preproc_wf, main_outputs, [
+        (func_preproc_wf, main_outputs, [
             ('preproc_outputs.bold', 'preproc.@bold'),
-            ('preproc_outputs.anat', 'preproc.@anat'),
             ('preproc_outputs.sbref', 'preproc.@sbref'),
         ]),
         (qc_wf, main_outputs, [
@@ -161,59 +179,9 @@ def build_main_wf():
         ]),
     ])
 
+    return main_wf
 
 
-    # ## Melodic workflow
+if "__main__" in __name__:
 
-    # In[18]:
-
-
-    melodic_wf = pe.Workflow(name='melodic_wf')
-
-    melodic_inputs = pe.Node(
-        pe.utils.IdentityInterface(
-            fields=['bold', 'mask']
-        ),
-        name='melodic_inputs'
-    )
-
-    # Smoothing node
-    smooth = pe.Node(
-        fsl.utils.Smooth(
-            sigma = 2.0
-        ),
-        name='smooth'
-    )
-
-    # Melodic node
-    melodic = pe.Node(
-        fsl.MELODIC(
-            approach = 'symm',
-            no_bet = True,
-            bg_threshold = 10,
-            tr_sec = 1.06,
-            mm_thresh = 0.5,
-            out_stats = True,
-            report = True,
-            out_dir = op.realpath('output/melodic')
-        ),
-        name='melodic'
-    )
-
-    melodic_outputs = pe.Node(
-        pe.utils.IdentityInterface(
-            fields=['melodic_output']
-        ),
-        name='melodic_outputs'
-    )
-
-    melodic_wf.connect([
-        (melodic_inputs, smooth, [('bold', 'in_file')]),
-        (melodic_inputs, melodic, [('mask', 'mask')]),
-        (smooth, melodic, [('smoothed_file', 'in_files')]),
-        (melodic, melodic_outputs, [('out_dir', 'melodic_output')])
-    ])
-
-
-
-
+    main()

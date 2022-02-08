@@ -8,7 +8,8 @@ import nipype.interfaces.afni as afni
 import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
-def build_preproc_wf():
+
+def build_func_preproc_wf(seepi_enc_fname, sbref_enc_fname):
 
     # Preproc inputs
     preproc_inputs = pe.Node(
@@ -61,41 +62,15 @@ def build_preproc_wf():
         ),
         name='apply_topup_bold')
 
-    # Skull strip unwarped sbref
-    bet_sbref = pe.Node(
-        fsl.BET(
-            mask=True,
-            robust=True,
-            output_type="NIFTI_GZ"
-        ),
-        name='bet_sbref'
-    )
-
-    # Skull strip unwarped bold - apply mask from sbref
-    bet_bold = pe.Node(
-        fsl.ImageMaths(),
-        name='bet_bold'
-    )
-
-    # Rigid body register anat to sbref
-    anat_to_sbref = pe.Node(
-        ants.RegistrationSynQuick(
-            transform_type='r',
-            num_threads=4
-        ),
-        name='anat_to_sbref',
-        terminal_output=None,
-    )
-
     # Define outputs from preproc workflow
     preproc_outputs = pe.Node(
         util.IdentityInterface(
-            fields=('bold', 'anat', 'sbref'),
+            fields=('bold', 'sbref'),
         ),
         name='preproc_outputs'
     )
 
-    # Rig workflow
+    # Build workflow
     preproc_wf = pe.Workflow(name='preproc_wf')
 
     preproc_wf.connect([
@@ -115,11 +90,8 @@ def build_preproc_wf():
             ('out_fieldcoef', 'in_topup_fieldcoef'),
             ('out_movpar', 'in_topup_movpar')
         ]),
-        (applytopup_sbref, anat_to_sbref, [('out_corrected', 'fixed_image')]),
-        (preproc_inputs, anat_to_sbref, [('anat', 'moving_image')]),
         (applytopup_sbref, preproc_outputs, [('out_corrected', 'sbref')]),
         (applytopup_bold, preproc_outputs, [('out_corrected', 'bold')]),
-        (anat_to_sbref, preproc_outputs, [('warped_image', 'anat')]),
     ])
 
     return preproc_wf
