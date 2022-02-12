@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/subcortical-qc.iml" filepath="$PROJECT_DIR$/.idea/subcortical-qc.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/scqc.iml" filepath="$PROJECT_DIR$/.idea/scqc.iml" />
     </modules>
   </component>
 </project>

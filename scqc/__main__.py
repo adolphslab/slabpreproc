@@ -6,6 +6,9 @@ Fast subcortical fMRI quality control
 - tSNR and tSFNR
 - ALFF and fALFF
 - Baseline drift map
+- Rigid body motion correction with and without low pass filtering
+
+Outputs QC results, motion and distortion corrected 4D BOLD series to derivatives
 
 AUTHOR : Mike Tyszka
 PLACE  : Caltech Brain Imaging Center
@@ -34,12 +37,16 @@ SOFTWARE.
 """
 import os
 import os.path as op
+import tempfile
 import numpy as np
 import pkg_resources
+import bids
 
 import nipype.interfaces.io as io
 import nipype.interfaces.utility as util 
 import nipype.pipeline.engine as pe
+
+from sdcflows.utils import wrangler
 
 from utils import (get_topup_pars, get_TR)
 from qc_workflow import build_qc_wf
@@ -53,28 +60,26 @@ def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Lightweight subcortical fMRI quality control')
-    parser.add_argument('-b', '--bold', default='bold.nii.gz', help='4D BOLD Nifti filename')
-    parser.add_argument('-sb', '--sbref', default='sbref.nii.gz', help='3D BOLD Nifti filename')
-    parser.add_argument('-ap', '--apfmap', default='ap.nii.gz', help='3D AP SE-EPI Nifti filename')
-    parser.add_argument('-pa', '--pafmap', default='pa.nii.gz', help='3D PA SE-EPI Nifti filename')
-    parser.add_argument('-t1', '--t1w', default='t1w.nii.gz', help='3D T1w Nifti filename')
+    parser.add_argument('-d', '--bidsdir', default='.', help="BIDS dataset directory ['.']")
+    parser.add_argument('-w', '--workdir', help='Work directory')
+    parser.add_argument('-su', '--subjid', default=[], help='Subject ID (without sub- prefix)')
+    parser.add_argument('-se', '--sessid', default=[], help='Sessin ID (without ses- prefix)')
+    parser.add_argument('-ta', '--taskid', default=[], help='Task ID (without task- prefix)')
 
     # Parse command line arguments
     args = parser.parse_args()
-    bold_fname = op.realpath(args.bold)
-    sbref_fname = op.realpath(args.sbref)
-    ap_fname = op.realpath(args.apfmap)
-    pa_fname = op.realpath(args.pafmap)
-    t1_fname = op.realpath(args.t1w)
 
-    base_dir = op.dirname(bold_fname)
-    out_dir = op.join(base_dir, 'output')
-    work_dir = op.join(base_dir, 'work')
+    bids_dir = args.bidsdir
 
-    if not op.isdir(work_dir):
-        os.makedirs(work_dir)
+    if args.workdir:
+        work_dir = args.workdir
+    else:
+        work_dir = tempfile.mkdtemp()
 
-    # Get atlas T1 template and labels filenames
+    # Create the work directory if necessary
+    os.makedirs(work_dir, exist_ok=True)
+
+    # Get atlas T1 template and labels filenames from package data
     atlas_t1_fname = pkg_resources.resource_filename(
         'scqc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz'
@@ -89,46 +94,52 @@ def main():
     )
 
     print('Subcortical Quality Control')
-    print(f'BOLD image  : {bold_fname}')
-    print(f'SBRef image : {sbref_fname}')
-    print(f'AP SE-EPI   : {ap_fname}')
-    print(f'PA SE-EPI   : {pa_fname}')
-    print(f'T1w image   : {t1_fname}')
-    print(f'Output dir  : {out_dir}')
-    print(f'Work dir    : {work_dir}')
+    print(f'BIDS directory : {bids_dir}')
+    print(f'Work directory : {work_dir}')
 
-    # Additional workflow arguments
-    seepi_fname = [ap_fname, pa_fname]
-    mocoref_fname = ap_fname
+    # Init a pybids layout
+    layout = bids.BIDSLayout(bids_dir)
 
-    # Get TOPUP metadata from JSON sidecars and save to working directory
-    seepi_etl, seepi_enc_mat = get_topup_pars(ap_fname)
-    seepi_enc_fname = op.join(work_dir, 'seepi_enc.txt')
-    if not op.isfile(seepi_enc_fname):
-        np.savetxt(seepi_enc_fname, seepi_enc_mat, fmt="%2d %2d %2d %9.6f")
-
-    sbref_etl, sbref_enc_mat = get_topup_pars(sbref_fname)
-    sbref_enc_fname = op.join(work_dir, 'sbref_enc.txt')
-    if not op.isfile(sbref_enc_fname):
-        np.savetxt(sbref_enc_fname, sbref_enc_mat, fmt="%2d %2d %2d %9.6f")
-
-    # Get TR from BOLD JSON sidecar
-    TR_s = get_TR(bold_fname)
+    # Collect families of images for each BOLD series (BOLD, T1, SBRef, AP and PA SE-EPI)
+    bold_families = build_bold_families(layout)
 
     # Build main workflow
     main_wf = build_main_wf(work_dir, out_dir, seepi_enc_fname, sbref_enc_fname, TR_s)
 
-    # Pass image filenames to main workflow
-    main_wf.inputs.main_inputs.bold = bold_fname
-    main_wf.inputs.main_inputs.seepi = seepi_fname
-    main_wf.inputs.main_inputs.sbref = sbref_fname
-    main_wf.inputs.main_inputs.mocoref = mocoref_fname
-    main_wf.inputs.main_inputs.ind_t1 = t1_fname
-    main_wf.inputs.main_inputs.atlas_labels = atlas_labels_fname
-    main_wf.inputs.main_inputs.atlas_t1 = atlas_t1_fname
+    # Loop over each BOLD series
+    for fam in bold_families:
 
-    # Run main workflow
-    main_wf.run()
+        bold_fname = fam['ap_fname']
+        sbref_fname = fam['sbref_fname']
+        ap_fname = fam['ap_fname']
+        pa_fname = fam['pa_fname']
+        t1_fname = fam['t1_fname']
+
+        # Get TOPUP metadata from JSON sidecars and save to working directory
+        seepi_etl, seepi_enc_mat = get_topup_pars(ap_fname)
+        seepi_enc_fname = op.join(work_dir, 'seepi_enc.txt')
+        if not op.isfile(seepi_enc_fname):
+            np.savetxt(seepi_enc_fname, seepi_enc_mat, fmt="%2d %2d %2d %9.6f")
+
+        sbref_etl, sbref_enc_mat = get_topup_pars(sbref_fname)
+        sbref_enc_fname = op.join(work_dir, 'sbref_enc.txt')
+        if not op.isfile(sbref_enc_fname):
+            np.savetxt(sbref_enc_fname, sbref_enc_mat, fmt="%2d %2d %2d %9.6f")
+
+        # Get TR from BOLD JSON sidecar
+        TR_s = get_TR(bold_fname)
+
+        # Pass image filenames to main workflow
+        main_wf.inputs.main_inputs.bold = bold_fname
+        main_wf.inputs.main_inputs.seepi = [ap_fname, pa_fname]
+        main_wf.inputs.main_inputs.sbref = sbref_fname
+        main_wf.inputs.main_inputs.mocoref = ap_fname
+        main_wf.inputs.main_inputs.ind_t1 = t1_fname
+        main_wf.inputs.main_inputs.atlas_labels = atlas_labels_fname
+        main_wf.inputs.main_inputs.atlas_t1 = atlas_t1_fname
+
+        # Run main workflow
+        main_wf.run()
 
 
 def build_main_wf(work_dir, out_dir, seepi_enc_fname, sbref_enc_fname, TR_s):
@@ -141,7 +152,7 @@ def build_main_wf(work_dir, out_dir, seepi_enc_fname, sbref_enc_fname, TR_s):
     # Input nodes
     main_inputs = pe.Node(
         util.IdentityInterface(
-            fields=['bold', 'seepi', 'mocoref', 'sbref', 'anat']),
+            fields=['bids_dir', 'work_dir', 'subj_id', 'sess_id', 'task_id']),
         name='main_inputs'
     )
 
@@ -165,8 +176,8 @@ def build_main_wf(work_dir, out_dir, seepi_enc_fname, sbref_enc_fname, TR_s):
             ('seepi', 'preproc_inputs.seepi'),
             ('mocoref', 'preproc_inputs.mocoref'),
         ]),
-        (func_preproc_wf, atlas_wf, [('preproc_outputs.sbref', 'atlas_inputs.ind_epi')])
-        (main_inputs, atlas_wf, [('', 'atlas_inputs.ind_epi')])
+        (func_preproc_wf, atlas_wf, [('preproc_outputs.sbref', 'atlas_inputs.ind_epi')]),
+        (main_inputs, atlas_wf, [('', 'atlas_inputs.ind_epi')]),
         (func_preproc_wf, qc_wf, [
             ('preproc_outputs.bold', 'qc_inputs.bold'),
         ]),

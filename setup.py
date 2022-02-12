@@ -37,7 +37,7 @@ setup(
     # There are some restrictions on what makes a valid project name
     # specification here:
     # https://packaging.python.org/specifications/core-metadata/#name
-    name='subcortical-qc',  # Required
+    name='scqc',  # Required
 
     # Versions should comply with PEP 440:
     # https://www.python.org/dev/peps/pep-0440/
@@ -45,7 +45,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='2022.2.4',  # Required
+    version='2022.2.11',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
@@ -144,15 +144,7 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['pydicom>=1.2.2',
-                      'numpy>=1.15.2',
-                      'scipy',
-                      'pybids',
-                      'nipype',
-                      'reportlab',
-                      'scikit-image',
-                      'scikit-learn>=0.24',
-                      'pandas'],  # Optional
+    install_requires=[],  # Optional
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
@@ -170,7 +162,7 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={
-        'subcortical-qc': ['atlas/*'],
+        'scqc': ['atlas/*'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
@@ -192,7 +184,7 @@ setup(
     # executes the function `main` from this package when invoked:
     entry_points={  # Optional
         'console_scripts': [
-            'subcortical-qc=subcortical-qc.__main__:main',
+            'scqc=scqc.__main__:main',
         ],
     },
 
@@ -206,8 +198,8 @@ setup(
     # maintainers, and where to support the project financially. The key is
     # what's used to render the link text on PyPI.
     project_urls={  # Optional
-        'Bug Reports': 'https://github.com/jmtyszka/subcortical-qc/issues',
+        'Bug Reports': 'https://github.com/jmtyszka/scqc/issues',
         'Funding': 'http://chen.caltech.edu/',
-        'Source': 'https://github.com/jmtyszka/subcortical-qc/',
+        'Source': 'https://github.com/jmtyszka/scqc/',
     },
 )
