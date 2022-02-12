@@ -46,8 +46,6 @@ import nipype.interfaces.io as io
 import nipype.interfaces.utility as util 
 import nipype.pipeline.engine as pe
 
-from sdcflows.utils import wrangler
-
 from utils import (get_topup_pars, get_TR)
 from qc_workflow import build_qc_wf
 from func_preproc_wf import build_func_preproc_wf
