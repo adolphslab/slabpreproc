@@ -52,6 +52,7 @@ from utils import (get_topup_pars, get_TR)
 from qc_workflow import build_qc_wf
 from func_preproc_wf import build_func_preproc_wf
 from atlas_wf import build_atlas_wf
+from bold_families import build_bold_families
 
 import argparse
 
