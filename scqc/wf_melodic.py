@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import nipype.interfaces.io as io
-import nipype.interfaces.utility as util
+import os.path as op
 import nipype.interfaces.fsl as fsl
-import nipype.interfaces.afni as afni
-import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
+
 
 def build_melodic_wf():
 

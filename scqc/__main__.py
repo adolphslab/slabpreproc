@@ -49,10 +49,10 @@ from glob import glob
 import bids
 bids.config.set_option('extension_initial_dot', True)
 
-from niworkflows.utils.bids import (collect_data, collect_participants)
+from niworkflows.utils.bids import (collect_participants)
 
 # Internal package imports
-from scqc_wf import build_scqc_wf
+from wf_scqc import build_wf_scqc
 
 
 def main():
@@ -112,15 +112,17 @@ def main():
         os.makedirs(this_work_dir, exist_ok=True)
 
         # Build the subcortical QC workflow
-        scqc_wf = build_scqc_wf(this_work_dir, deriv_dir)
+        wf_scqc = build_wf_scqc(this_work_dir, deriv_dir)
 
         # Supply input images
-        scqc_wf.inputs.scqc_inputs.bold = bold
-        scqc_wf.inputs.scqc_inputs.ind_t1 = ind_t1
-        scqc_wf.inputs.scqc_inputs.atlas_t1 = atlas_t1_fname
-        scqc_wf.inputs.scqc_inputs.atlas_labels = atlas_labels_fname
+        wf_scqc.inputs.scqc_inputs.bold = bold
+        wf_scqc.inputs.scqc_inputs.ind_t1 = ind_t1
+        wf_scqc.inputs.scqc_inputs.atlas_t1 = atlas_t1_fname
+        wf_scqc.inputs.scqc_inputs.atlas_labels = atlas_labels_fname
 
-        scqc_wf.run()
+        # Run workflow
+        # Results are stored in BIDS derivatives folder
+        wf_scqc.run()
 
 
 if "__main__" in __name__:

@@ -4,12 +4,12 @@
 ANTs SyN register FSL Harvard-Oxford subcortical atlas to individual T1
 """
 
-import numpy as np
 import nipype.interfaces.utility as util
 import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
-def build_atlas_wf():
+
+def build_wf_atlas():
 
     # Atlas inputs
     atlas_inputs = pe.Node(

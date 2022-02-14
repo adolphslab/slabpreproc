@@ -6,7 +6,7 @@ import nipype.interfaces.fsl as fsl
 import nipype.pipeline.engine as pe
 
 
-def build_func_preproc_wf():
+def build_wf_func_preproc():
 
     # Preproc inputs
     preproc_inputs = pe.Node(
@@ -175,6 +175,10 @@ def find_aux_files(bold):
     # Create a logger for this function
     logger = logging.getLogger("nipype.interface")
 
+    # BOLD series basename
+    bold_bname = op.basename(bold)
+    logger.info(f'Locating auxiliary files for {bold_bname}')
+
     # SBRef by filename substitution
     sbref = bold.replace('_bold', '_sbref')
 
@@ -184,8 +188,6 @@ def find_aux_files(bold):
 
     # Find EPI fieldmaps intended for this BOLD series (depends heavily on bidskit --bind-fmaps)
     epi_fmaps = layout.get(datatype='fmap', suffix='epi', extension='.nii.gz')
-
-    bold_bname = op.basename(bold)
 
     seepi_list = []
 
@@ -262,13 +264,9 @@ def make_encoding_file(readout_times, encoding_direction):
     if not op.isfile(encoding_file):
         try:
             np.savetxt(fname=str(encoding_file), X=enc_mat, fmt="%2d %2d %2d %9.6f")
-        except:
+        except IOError:
             print(f'* Could not save encoding matrix to {str(encoding_file)}')
 
     logger.info(f'Saved encoding matrix to {encoding_file}')
 
     return encoding_file
-
-
-
-

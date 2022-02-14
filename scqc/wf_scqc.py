@@ -32,20 +32,16 @@ SOFTWARE.
 
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
-
-# Wrapper class setting derivatives subfolder
-from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
-class DerivativesDataSink(BIDSDerivatives):
-    out_path_base = 'scqc'
+from wf_qc import build_wf_qc
+from wf_func_preproc import build_wf_func_preproc
+from wf_atlas import build_wf_atlas
+from niworkflows.interfaces.bids import DerivativesDataSink
 
 # Internal package imports
-from qc_workflow import build_qc_wf
-from func_preproc_wf import build_func_preproc_wf
-from atlas_wf import build_atlas_wf
+from wf_derivatives import build_wf_derivatives
 
 
-
-def build_scqc_wf(work_dir, deriv_dir):
+def build_wf_scqc(work_dir, deriv_dir):
     """
     Build main subcortical QC workflow
 
@@ -68,76 +64,54 @@ def build_scqc_wf(work_dir, deriv_dir):
         name='scqc_inputs'
     )
 
-    # Subcortical QC outputs
-    scqc_outputs = pe.Node(
-        util.IdentityInterface(
-            fields=[
-                'bold_preproc',
-                'sbref_preproc',
-                'bold_tmean',
-                'bold_tsd',
-                'bold_thpf',
-                'bold_tsnr',
-                't1_atlas_epi',
-                'labels_atlas_epi',
-                't1_ind_epi'
-            ]
-        ),
-        name='scqc_outputs'
-    )
-
-    # Create a BIDS derivatives sink for all outputs
-    # bids_sink = pe.Node(
-    #     DerivativesDataSink(),
-    #     name='bids_sink'
-    # )
-
     # Build sub workflows
-    func_preproc_wf = build_func_preproc_wf()
-    atlas_wf = build_atlas_wf()
-    qc_wf = build_qc_wf()
+    wf_func_preproc = build_wf_func_preproc()
+    wf_atlas = build_wf_atlas()
+    wf_qc = build_wf_qc()
+    wf_derivatives = build_wf_derivatives(deriv_dir)
 
-    scqc_wf = pe.Workflow(
+    # Main subcortical QC workflow
+    wf_scqc = pe.Workflow(
         base_dir=str(work_dir),
-        name='scqc_wf'
+        name='wf_scqc'
     )
 
-    scqc_wf.connect([
+    wf_scqc.connect([
 
         # Pass images to preproc and atlas workflow
-        (scqc_inputs, func_preproc_wf, [('bold', 'preproc_inputs.bold')]),
-        (scqc_inputs, atlas_wf, [
+        (scqc_inputs, wf_func_preproc, [('bold', 'preproc_inputs.bold')]),
+        (scqc_inputs, wf_atlas, [
             ('ind_t1', 'atlas_inputs.ind_t1'),
             ('atlas_t1', 'atlas_inputs.atlas_t1'),
             ('atlas_labels', 'atlas_inputs.atlas_labels')
         ]),
 
         # Pass fMRI preproc results to atlas workflow
-        (func_preproc_wf, atlas_wf, [('preproc_outputs.sbref', 'atlas_inputs.ind_epi')]),
+        (wf_func_preproc, wf_atlas, [('preproc_outputs.sbref', 'atlas_inputs.ind_epi')]),
 
         # Pass fMRI preproc results to QC workflow
-        (func_preproc_wf, qc_wf, [('preproc_outputs.bold', 'qc_inputs.bold')]),
+        (wf_func_preproc, wf_qc, [('preproc_outputs.bold', 'qc_inputs.bold')]),
 
         # Write preproc results to derivatives folder
-        (func_preproc_wf, scqc_outputs, [
-            ('preproc_outputs.bold', 'bold_preproc'),
-            ('preproc_outputs.sbref', 'sbref_preproc'),
+        (wf_func_preproc, wf_derivatives, [
+            ('preproc_outputs.bold', 'inputs.bold_preproc'),
+            ('preproc_outputs.sbref', 'inputs.sbref_preproc'),
         ]),
 
         # Write EPI-space atlas results to derivatives folder
-        (atlas_wf, scqc_outputs, [
-            ('atlas_outputs.t1_atlas_epi', 't1_atlas_epi'),
-            ('atlas_outputs.labels_atlas_epi', 'labels_atlas_epi'),
-            ('atlas_outputs.t1_ind_epi', 't1_ind_epi'),
+        (wf_atlas, wf_derivatives, [
+            ('atlas_outputs.t1_atlas_epi', 'inputs.t1_atlas_epi'),
+            ('atlas_outputs.labels_atlas_epi', 'inputs.labels_atlas_epi'),
+            ('atlas_outputs.t1_ind_epi', 'inputs.t1_ind_epi'),
         ]),
 
         # Write QC results to derivatives folder
-        (qc_wf, scqc_outputs, [
-            ('qc_outputs.bold_tmean', 'bold_tmean'),
-            ('qc_outputs.bold_tsd', 'bold_tsd'),
-            ('qc_outputs.bold_thpf', 'bold_thpf'),
-            ('qc_outputs.bold_tsfnr', 'bold_tsfnr'),
+        (wf_qc, wf_derivatives, [
+            ('qc_outputs.bold_tmean', 'inputs.bold_tmean'),
+            ('qc_outputs.bold_tsd', 'inputs.bold_tsd'),
+            ('qc_outputs.bold_thpf', 'inputs.bold_thpf'),
+            ('qc_outputs.bold_tsfnr', 'inputs.bold_tsfnr'),
         ]),
     ])
 
-    return scqc_wf
+    return wf_scqc

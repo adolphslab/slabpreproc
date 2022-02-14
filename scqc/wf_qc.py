@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import numpy as np
 import nipype.interfaces.utility as util
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.afni as afni
 import nipype.pipeline.engine as pe
 
-def build_qc_wf():
+
+def build_wf_qc():
 
     # QC inputs
     qc_inputs = pe.Node(
@@ -102,12 +102,12 @@ def calc_hpf_sigma():
 
     # Get BOLD TR
     # TODO: Get this from BOLD metadata
-    TR_s = 0.8
+    tr_s = 0.8
 
     # Convert 100 s to volumes
-    n_vol_100 = np.round(100.0 / TR_s).astype(int)
+    n_vol_100 = np.round(100.0 / tr_s).astype(int)
 
-    print(f'calc_hpf_sigma: 100 s = {n_vol_100:d} volumes @ TR {TR_s} s')
+    print(f'calc_hpf_sigma: 100 s = {n_vol_100:d} volumes @ TR {tr_s} s')
 
     # Construct fslmaths operator string
     op_string = f'-bptf {n_vol_100} -1'

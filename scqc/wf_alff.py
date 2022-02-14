@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import nipype.interfaces.io as io
-import nipype.interfaces.utility as util
-import nipype.interfaces.fsl as fsl
 import nipype.interfaces.afni as afni
-import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
-def build_alff_wf():
 
-    alff_wf = pe.Workflow(name='alff_wf')
+def build_wf_alff():
+
+    wf_alff = pe.Workflow(name='wf_alff')
 
     # Temporal bandpass filter [0.01, 0.1]
     bandpass = pe.Node(
@@ -29,4 +26,8 @@ def build_alff_wf():
         name='alff'
     )
 
-    return alff_wf
+    wf_alff.connect([
+        (bandpass, alff, [('out_file', 'in_file')])
+    ])
+
+    return wf_alff
