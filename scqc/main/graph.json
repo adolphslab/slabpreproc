@@ -1,0 +1,170 @@
+[
+    {
+        "group": 1,
+        "imports": [],
+        "name": "00_bids_src",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [],
+        "name": "01_hpf_sigma",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "00_bids_src"
+        ],
+        "name": "02_aux_files",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "00_bids_src"
+        ],
+        "name": "03_t1_atlas_to_ind",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "02_aux_files"
+        ],
+        "name": "04_seepi_topup_info",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "02_aux_files"
+        ],
+        "name": "05_sbref_topup_info",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "02_aux_files"
+        ],
+        "name": "06_concat",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "02_aux_files",
+            "00_bids_src"
+        ],
+        "name": "07_mcflirt",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "05_sbref_topup_info"
+        ],
+        "name": "08_sbref_enc_file",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "04_seepi_topup_info",
+            "06_concat"
+        ],
+        "name": "09_topup",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "02_aux_files",
+            "08_sbref_enc_file",
+            "09_topup"
+        ],
+        "name": "10_apply_topup_sbref",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "08_sbref_enc_file",
+            "07_mcflirt",
+            "09_topup"
+        ],
+        "name": "11_apply_topup_bold",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "00_bids_src",
+            "10_apply_topup_sbref"
+        ],
+        "name": "12_t1_ind_to_epi",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "11_apply_topup_bold"
+        ],
+        "name": "13_bold_tmean",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "01_hpf_sigma",
+            "11_apply_topup_bold"
+        ],
+        "name": "14_bold_hpf",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "11_apply_topup_bold",
+            "10_apply_topup_sbref"
+        ],
+        "name": "15_bids_sink",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "03_t1_atlas_to_ind",
+            "12_t1_ind_to_epi"
+        ],
+        "name": "16_merge_tx_files",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "14_bold_hpf"
+        ],
+        "name": "17_bold_tsd",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "16_merge_tx_files",
+            "10_apply_topup_sbref"
+        ],
+        "name": "18_labels_atlas_to_epi",
+        "size": 1
+    },
+    {
+        "group": 1,
+        "imports": [
+            "13_bold_tmean",
+            "17_bold_tsd"
+        ],
+        "name": "19_bold_tsfnr",
+        "size": 1
+    }
+]

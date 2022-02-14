@@ -1,56 +1,22 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import numpy as np
-import json
-import nipype.interfaces.io as io
-import nipype.interfaces.utility as util
-import nipype.interfaces.fsl as fsl
-import nipype.interfaces.afni as afni
-import nipype.interfaces.ants as ants
-import nipype.pipeline.engine as pe
+from niworkflows.utils.bids import get_metadata_for_nifti
 
-def get_topup_pars(nii_fname):
+def get_readout_time(nii_fname):
+    t_ro = get_metadata_for_nifti(nii_fname, validate=False)['TotalReadoutTime']
+    return t_ro
 
-    json_fname = nii_fname.replace('.nii.gz', '.json')
-    meta = read_json(json_fname)
 
-    etl = meta['TotalReadoutTime']
-    enc_mat = np.array([
-        [0, 1, 0, etl],
-        [0, -1, 0, etl]
-    ])
-
-    return etl, enc_mat
+def get_pe_dir(nii_fname):
+    bids_pe_dir = get_metadata_for_nifti(nii_fname, validate=False)['PhaseEncodingDirection']
+    fsl_pe_dir = bids_to_fsl_dirn(bids_pe_dir)
+    return fsl_pe_dir
 
 
 def get_TR(nii_fname):
-
-    json_fname = nii_fname.replace('.nii.gz', '.json')
-    meta = read_json(json_fname)
-
-    return meta['RepetitionTime']
+    return get_metadata_for_nifti(nii_fname, validate=False)['RepetitionTime']
 
 
-def read_json(fname):
-    """
-    Safely read JSON sidecar file into a dictionary
-    :param fname: string
-        JSON filename
-    :return: dictionary structure
-    """
-
-    try:
-        fd = open(fname, 'r')
-        json_dict = json.load(fd)
-        fd.close()
-    except IOError:
-        print('*** {}'.format(fname))
-        print('*** JSON sidecar not found - returning empty dictionary')
-        json_dict = dict()
-    except json.decoder.JSONDecodeError:
-        print('*** {}'.format(fname))
-        print('*** JSON sidecar decoding error - returning empty dictionary')
-        json_dict = dict()
-
-    return json_dict
+def bids_to_fsl_dirn(bids_dirn):
+    return bids_dirn.replace('i', 'x').replace('j', 'y').replace('k', 'z')

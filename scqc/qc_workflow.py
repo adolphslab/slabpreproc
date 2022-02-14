@@ -7,7 +7,7 @@ import nipype.interfaces.fsl as fsl
 import nipype.interfaces.afni as afni
 import nipype.pipeline.engine as pe
 
-def build_qc_wf(TR_s):
+def build_qc_wf():
 
     # QC inputs
     qc_inputs = pe.Node(
@@ -17,14 +17,21 @@ def build_qc_wf(TR_s):
         name='qc_inputs'
     )
 
-    # Convert 100 s to volumes
-    n_vol_100 = np.round(100.0 / TR_s)
+    # Calc HPF sigma in volumes
+    # Return an operator string usable by fslmaths
+    hpf_sigma = pe.Node(
+        util.Function(
+            input_names=['bold'],
+            output_names=['op_string'],
+            function=calc_hpf_sigma
+        ),
+        name='hpf_sigma'
+    )
 
     # High pass filter to remove slow trends and baseline
-    bold_hpf = pe.Node(
+    bold_thpf = pe.Node(
         fsl.ImageMaths(
-            op_string=f'-bptf {n_vol_100} -1',
-            out_file='bold_hpf.nii.gz'
+            out_file='bold_thpf.nii.gz'
         ),
         name='bold_hpf'
     )
@@ -58,7 +65,12 @@ def build_qc_wf(TR_s):
     # Define outputs from preproc workflow
     qc_outputs = pe.Node(
         util.IdentityInterface(
-            fields=['tsfnr']
+            fields=[
+                'bold_tmean',
+                'bold_tsd',
+                'bold_thpf',
+                'bold_tsfnr'
+            ]
         ),
         name='qc_outputs'
     )
@@ -68,11 +80,36 @@ def build_qc_wf(TR_s):
 
     qc_wf.connect([
         (qc_inputs, bold_tmean, [('bold', 'in_file')]),
-        (qc_inputs, bold_hpf, [('bold', 'in_file')]),
-        (bold_hpf, bold_tsd, [('out_file', 'in_file')]),
+        (qc_inputs, bold_thpf, [('bold', 'in_file')]),
+        (hpf_sigma, bold_thpf, [('op_string', 'op_string')]),
+        (bold_thpf, bold_tsd, [('out_file', 'in_file')]),
         (bold_tmean, bold_tsfnr, [('out_file', 'in_file')]),
         (bold_tsd, bold_tsfnr, [('out_file', 'in_file2')]),
-        (bold_tsfnr, qc_outputs, [('out_file', 'tsfnr')])
+
+        # Return all stats images
+        (bold_tmean, qc_outputs, [('out_file', 'bold_tmean')]),
+        (bold_tsd, qc_outputs, [('out_file', 'bold_tsd')]),
+        (bold_thpf, qc_outputs, [('out_file', 'bold_thpf')]),
+        (bold_tsfnr, qc_outputs, [('out_file', 'bold_tsfnr')])
     ])
 
     return qc_wf
+
+
+def calc_hpf_sigma():
+
+    import numpy as np
+
+    # Get BOLD TR
+    # TODO: Get this from BOLD metadata
+    TR_s = 0.8
+
+    # Convert 100 s to volumes
+    n_vol_100 = np.round(100.0 / TR_s).astype(int)
+
+    print(f'calc_hpf_sigma: 100 s = {n_vol_100:d} volumes @ TR {TR_s} s')
+
+    # Construct fslmaths operator string
+    op_string = f'-bptf {n_vol_100} -1'
+
+    return op_string
