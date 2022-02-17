@@ -66,7 +66,10 @@ def main():
     args = parser.parse_args()
 
     bids_dir = Path(args.bidsdir)
-    deriv_dir = bids_dir / 'derivatives'
+
+    # Output derivatives folder
+    deriv_dir = bids_dir / 'derivatives' / 'scqc'
+    os.makedirs(deriv_dir, exist_ok=True)
 
     if args.workdir:
         work_dir = Path(args.workdir)
@@ -74,15 +77,15 @@ def main():
         work_dir = Path(tempfile.mkdtemp())
 
     # Get atlas T1 template and labels filenames from package data
-    atlas_t1_fname = pkg_resources.resource_filename(
+    t1_atlas = pkg_resources.resource_filename(
         'scqc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz'
     )
-    atlas_labels_fname = pkg_resources.resource_filename(
+    labels_atlas = pkg_resources.resource_filename(
         'scqc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_atlas-HOSPA_desc-th25_dseg.nii.gz'
     )
-    atlas_brain_fname = pkg_resources.resource_filename(
+    probbrain_atlas = pkg_resources.resource_filename(
         'scqc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_desc-brain_probseg.nii.gz'
     )
@@ -99,9 +102,11 @@ def main():
     # Get list of all magnitude BOLD series for this subject
     bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'func' / '*part-mag*_bold.nii.gz')))
 
+
+
     # Get list of all bias corrected RMS MEMPRAGE images for this subjec
     t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'anat' / '*rms*norm*T1w.nii.gz')))
-    ind_t1 = t1_list[0]
+    t1_ind = t1_list[0]
 
     # BOLD image loop
     for bold in bold_list:
@@ -115,10 +120,10 @@ def main():
         wf_scqc = build_wf_scqc(this_work_dir, deriv_dir)
 
         # Supply input images
-        wf_scqc.inputs.scqc_inputs.bold = bold
-        wf_scqc.inputs.scqc_inputs.ind_t1 = ind_t1
-        wf_scqc.inputs.scqc_inputs.atlas_t1 = atlas_t1_fname
-        wf_scqc.inputs.scqc_inputs.atlas_labels = atlas_labels_fname
+        wf_scqc.inputs.inputs.bold = bold
+        wf_scqc.inputs.inputs.t1_ind = t1_ind
+        wf_scqc.inputs.inputs.t1_atlas = t1_atlas
+        wf_scqc.inputs.inputs.labels_atlas = labels_atlas
 
         # Run workflow
         # Results are stored in BIDS derivatives folder

@@ -4,96 +4,74 @@
 import nipype.interfaces.utility as util
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.afni as afni
+import nipype.algorithms.confounds as confounds
 import nipype.pipeline.engine as pe
 
 
 def build_wf_qc():
 
     # QC inputs
-    qc_inputs = pe.Node(
+    inputs = pe.Node(
         util.IdentityInterface(
             fields=['bold', 'anat']
         ),
-        name='qc_inputs'
+        name='inputs'
     )
 
     # Calc HPF sigma in volumes
     # Return an operator string usable by fslmaths
-    hpf_sigma = pe.Node(
-        util.Function(
-            input_names=['bold'],
-            output_names=['op_string'],
-            function=calc_hpf_sigma
-        ),
-        name='hpf_sigma'
-    )
-
-    # High pass filter to remove slow trends and baseline
-    bold_thpf = pe.Node(
-        fsl.ImageMaths(
-            out_file='bold_thpf.nii.gz'
-        ),
-        name='bold_hpf'
-    )
-
-    # Temporal mean
-    bold_tmean = pe.Node(
-        afni.TStat(
-            args='-mean',
-            out_file='bold_tmean.nii.gz'
-        ),
-        name='bold_tmean'
-    )
-
-    # Temporal SD without linear detrending
-    bold_tsd = pe.Node(
-        afni.TStat(
-            args='-stdevNOD',
-            out_file='bold_tsd.nii.gz'
-        ),
-        name='bold_tsd'
-    )
+    # hpf_sigma = pe.Node(
+    #     util.Function(
+    #         input_names=['bold'],
+    #         output_names=['op_string'],
+    #         function=calc_hpf_sigma
+    #     ),
+    #     name='hpf_sigma'
+    # )
+    #
+    # # High pass filter (> 0.01 Hz) to remove low frequency baseline for tSD calc
+    # # fslmaths HPF uses robust non-linear baseline estimation, superior to linear filtering
+    # bold_thpf = pe.Node(
+    #     fsl.ImageMaths(
+    #         out_file='bold_thpf.nii.gz'
+    #     ),
+    #     name='bold_hpf'
+    # )
 
     bold_tsfnr = pe.Node(
-        fsl.ImageMaths(
-            op_string='-div',
-            out_file='bold_tsfnr.nii.gz'
+        confounds.TSNR(
+            regress_poly=2,  # Quadratic detrending
         ),
         name='bold_tsfnr'
     )
 
     # Define outputs from preproc workflow
-    qc_outputs = pe.Node(
+    outputs = pe.Node(
         util.IdentityInterface(
             fields=[
                 'bold_tmean',
                 'bold_tsd',
-                'bold_thpf',
+                'bold_detrended',
                 'bold_tsfnr'
             ]
         ),
-        name='qc_outputs'
+        name='outputs'
     )
 
     # QC workflow setup
-    qc_wf = pe.Workflow(name='qc_wf')
+    wf_qc = pe.Workflow(name='wf_qc')
 
-    qc_wf.connect([
-        (qc_inputs, bold_tmean, [('bold', 'in_file')]),
-        (qc_inputs, bold_thpf, [('bold', 'in_file')]),
-        (hpf_sigma, bold_thpf, [('op_string', 'op_string')]),
-        (bold_thpf, bold_tsd, [('out_file', 'in_file')]),
-        (bold_tmean, bold_tsfnr, [('out_file', 'in_file')]),
-        (bold_tsd, bold_tsfnr, [('out_file', 'in_file2')]),
+    wf_qc.connect([
+        (inputs, bold_tsfnr, [('bold', 'in_file')]),
 
         # Return all stats images
-        (bold_tmean, qc_outputs, [('out_file', 'bold_tmean')]),
-        (bold_tsd, qc_outputs, [('out_file', 'bold_tsd')]),
-        (bold_thpf, qc_outputs, [('out_file', 'bold_thpf')]),
-        (bold_tsfnr, qc_outputs, [('out_file', 'bold_tsfnr')])
+        (bold_tsfnr, outputs, [('mean_file', 'bold_tmean')]),
+        (bold_tsfnr, outputs, [('stddev_file', 'bold_tsd')]),
+        (bold_tsfnr, outputs, [('detrended_file', 'bold_detrended')]),
+        (bold_tsfnr, outputs, [('tsnr_file', 'bold_tsfnr')])
     ])
 
-    return qc_wf
+    return wf_qc
 
 
 def calc_hpf_sigma():

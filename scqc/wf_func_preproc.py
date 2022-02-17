@@ -9,11 +9,11 @@ import nipype.pipeline.engine as pe
 def build_wf_func_preproc():
 
     # Preproc inputs
-    preproc_inputs = pe.Node(
+    inputs = pe.Node(
         util.IdentityInterface(
             fields=('bold', 'anat')
         ),
-        name='preproc_inputs'
+        name='inputs'
     )
 
     # Find SBRef, MOCORef and TOPUP SE-EPIs
@@ -108,18 +108,18 @@ def build_wf_func_preproc():
         name='apply_topup_bold')
 
     # Define outputs from preproc workflow
-    preproc_outputs = pe.Node(
+    outputs = pe.Node(
         util.IdentityInterface(
             fields=('bold', 'sbref'),
         ),
-        name='preproc_outputs'
+        name='outputs'
     )
 
     # Build workflow
-    preproc_wf = pe.Workflow(name='preproc_wf')
+    wf_func_preproc = pe.Workflow(name='wf_func_preproc')
 
-    preproc_wf.connect([
-        (preproc_inputs, aux_files, [('bold', 'bold')]),
+    wf_func_preproc.connect([
+        (inputs, aux_files, [('bold', 'bold')]),
 
         (aux_files, seepi_topup_info, [('seepi_list', 'epis')]),
         (aux_files, sbref_topup_info, [('sbref', 'epis')]),
@@ -134,7 +134,7 @@ def build_wf_func_preproc():
         ]),
 
         (aux_files, concat, [('seepi_list', 'in_files')]),
-        (preproc_inputs, mcflirt, [('bold', 'in_file')]),
+        (inputs, mcflirt, [('bold', 'in_file')]),
         (aux_files, mcflirt, [('mocoref', 'ref_file')]),
 
         # Fit TOPUP model to SE-EPIs
@@ -159,11 +159,11 @@ def build_wf_func_preproc():
 
 
         # Output results
-        (applytopup_sbref, preproc_outputs, [('out_corrected', 'sbref')]),
-        (applytopup_bold, preproc_outputs, [('out_corrected', 'bold')]),
+        (applytopup_sbref, outputs, [('out_corrected', 'sbref')]),
+        (applytopup_bold, outputs, [('out_corrected', 'bold')]),
     ])
 
-    return preproc_wf
+    return wf_func_preproc
 
 
 def find_aux_files(bold):
