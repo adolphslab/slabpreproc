@@ -207,15 +207,34 @@ def find_aux_files(bold):
 
 
 def get_topup_info(epis):
+    """
+    Get TOPUP metadata from BIDS tree for each EPI image
+    Function must be standalone - don't use utility functions within this package
 
-    from utils import (get_readout_time, get_pe_dir)
+    :param epis:
+    :return: readout_times
+    :return: encoding_direction
+    """
+
+    from niworkflows.utils.bids import get_metadata_for_nifti
 
     # Convert single strings into list of length 1
     if type(epis) == str:
         epis = [epis]
 
-    readout_times = [get_readout_time(epi) for epi in epis]
-    encoding_direction = [get_pe_dir(epi) for epi in epis]
+    readout_times = []
+    encoding_direction = []
+
+    # Extract readout time and PE direction for each EPI image provided
+    for epi_fname in epis:
+
+        t_ro = get_metadata_for_nifti(epi_fname, validate=False)['TotalReadoutTime']
+        readout_times.append(t_ro)
+
+        # Convert BIDS PE direction (i, j, k) to FSL direction (x, y, z)
+        bids_pe_dir = get_metadata_for_nifti(epi_fname, validate=False)['PhaseEncodingDirection']
+        fsl_pe_dir = bids_pe_dir.replace('i', 'x').replace('j', 'y').replace('k', 'z')
+        encoding_direction.append(fsl_pe_dir)
 
     return readout_times, encoding_direction
 

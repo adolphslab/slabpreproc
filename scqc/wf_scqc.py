@@ -32,13 +32,12 @@ SOFTWARE.
 
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
-from wf_qc import build_wf_qc
-from wf_func_preproc import build_wf_func_preproc
-from wf_atlas import build_wf_atlas
-from niworkflows.interfaces.bids import DerivativesDataSink
+from .wf_qc import build_wf_qc
+from .wf_func_preproc import build_wf_func_preproc
+from .wf_atlas import build_wf_atlas
 
 # Internal package imports
-from wf_derivatives import build_wf_derivatives
+from .wf_derivatives import build_wf_derivatives
 
 
 def build_wf_scqc(work_dir, deriv_dir):
@@ -92,6 +91,9 @@ def build_wf_scqc(work_dir, deriv_dir):
         # Pass fMRI preproc results to QC workflow
         (wf_func_preproc, wf_qc, [('outputs.bold', 'inputs.bold')]),
 
+        # Pass atlas labels to QC workflow
+        (wf_atlas, wf_qc, [('outputs.labels_atlas2epi', 'inputs.labels')]),
+
         # Pass original BOLD filename as source file for derivatives output filenaming
         (inputs, wf_derivatives, [('bold', 'inputs.source_file')]),
 
@@ -115,6 +117,7 @@ def build_wf_scqc(work_dir, deriv_dir):
             ('outputs.bold_tsd', 'inputs.bold_tsd'),
             ('outputs.bold_detrended', 'inputs.bold_detrended'),
             ('outputs.bold_tsfnr', 'inputs.bold_tsfnr'),
+            ('outputs.bold_tsfnr_roistats', 'inputs.bold_tsfnr_roistats')
         ]),
     ])
 

@@ -6,9 +6,6 @@ Build workflow to name and place pipeline results appropriately in the BIDS deri
 Based on code fragments from https://github.com/nipreps/fmriprep/blob/master/fmriprep/workflows/bold/outputs.py
 """
 
-import os
-
-import bids.layout
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
 
@@ -33,6 +30,7 @@ def build_wf_derivatives(deriv_dir):
                 'bold_tsd',
                 'bold_detrended',
                 'bold_tsfnr',
+                'bold_tsfnr_roistats',
                 't1_atlas2ind',
                 't1_ind2epi',
                 't1_atlas2epi',
@@ -42,6 +40,8 @@ def build_wf_derivatives(deriv_dir):
     )
 
     # Build individual data sinks for each input
+    # Allows for renaming and sorting into directories
+
     ds_bold_preproc = pe.Node(util.Function(
         input_names=['source_file', 'in_file', 'deriv_dir', 'new_suffix', 'datatype'], output_names=[],
         function=bids_sink), name='ds_bold_preproc')
@@ -84,6 +84,13 @@ def build_wf_derivatives(deriv_dir):
     ds_bold_tsfnr.inputs.new_suffix = 'recon-tsfnr_bold'
     ds_bold_tsfnr.inputs.datatype = 'qc'
 
+    ds_bold_tsfnr_roistats= pe.Node(util.Function(
+        input_names=['source_file', 'in_file', 'deriv_dir', 'new_suffix', 'datatype'], output_names=[],
+        function=text_sink), name='ds_bold_tsfnr_roistats')
+    ds_bold_tsfnr_roistats.inputs.deriv_dir = deriv_dir
+    ds_bold_tsfnr_roistats.inputs.new_suffix = 'recon-tsfnr_bold_roistats'
+    ds_bold_tsfnr_roistats.inputs.datatype = 'qc'
+
     ds_t1_atlas2ind = pe.Node(util.Function(
         input_names=['source_file', 'in_file', 'deriv_dir', 'new_suffix', 'datatype'], output_names=[],
         function=bids_sink), name='ds_t1_atlas2ind')
@@ -120,6 +127,7 @@ def build_wf_derivatives(deriv_dir):
         (inputs, ds_bold_tsd, [('source_file', 'source_file'), ('bold_tsd', 'in_file')]),
         (inputs, ds_bold_detrended, [('source_file', 'source_file'), ('bold_detrended', 'in_file')]),
         (inputs, ds_bold_tsfnr, [('source_file', 'source_file'), ('bold_tsfnr', 'in_file')]),
+        (inputs, ds_bold_tsfnr_roistats, [('source_file', 'source_file'), ('bold_tsfnr_roistats', 'in_file')]),
         (inputs, ds_t1_atlas2ind, [('source_file', 'source_file'), ('t1_atlas2ind', 'in_file')]),
         (inputs, ds_t1_ind2epi, [('source_file', 'source_file'), ('t1_ind2epi', 'in_file')]),
         (inputs, ds_t1_atlas2epi, [('source_file', 'source_file'), ('t1_atlas2epi', 'in_file')]),
@@ -132,9 +140,55 @@ def build_wf_derivatives(deriv_dir):
 
 def bids_sink(source_file, in_file, deriv_dir, new_suffix, datatype):
     """
+    Copy BIDS image file from working directory to derivatives folder with suffix modification
 
     :param source_file: str, pathlike
+    :param in_file: str, pathlike
+        File to write to derivatives output subfolder
+    :param deriv_dir: Path
+        Derivatives output subfolder path
+    :param new_suffix: str
+        Suffix to replace existing source_file suffix in derivatives output
+    :param datatype: str
+        Data type for subfolder creation
+    :return:
+    """
 
+    from os import makedirs
+    import os.path as op
+    import bids
+    import shutil
+    from nipype.utils.logger import logging
+
+    logger = logging.getLogger('nipype.interface')
+
+    # Source file basename (typically .nii.gz image)
+    source_bname = op.basename(source_file)
+
+    # Get entities from source_file
+    keys = bids.layout.parse_file_entities(source_file)
+
+    subj_id = keys['subject']
+    sess_id = keys['session']
+    old_suffix = keys['suffix']
+
+    # Create subject/session/datatype output folder
+    out_dir = op.join(deriv_dir, 'sub-' + subj_id, 'ses-' + sess_id, datatype)
+    makedirs(out_dir, exist_ok=True)
+
+    # Output file path. Replace current suffix with new suffix and add .txt extension
+    out_file = op.join(out_dir, source_bname.replace(old_suffix, new_suffix))
+
+    # Copy in_file to deriv_dir/subj_dir/sess_dir/out_file
+    logger.info(f'Copying {in_file} to {out_file}')
+    shutil.copyfile(in_file, out_file)
+
+
+def text_sink(source_file, in_file, deriv_dir, new_suffix, datatype):
+    """
+    Copy text results file from working directory to derivatives folder with suffix modification
+
+    :param source_file: str, pathlike
     :param in_file: str, pathlike
         File to write to derivatives output subfolder
     :param deriv_dir: Path
@@ -157,6 +211,10 @@ def bids_sink(source_file, in_file, deriv_dir, new_suffix, datatype):
     # Source file basename
     source_bname = op.basename(source_file)
 
+    # Strip maximum of two extensions
+    source_bname, _ = op.splitext(source_bname)
+    source_bname, _ = op.splitext(source_bname)
+
     # Get entities from source_file
     keys = bids.layout.parse_file_entities(source_file)
 
@@ -169,7 +227,7 @@ def bids_sink(source_file, in_file, deriv_dir, new_suffix, datatype):
     makedirs(out_dir, exist_ok=True)
 
     # Output file path. Replace current suffix with new suffix
-    out_file = op.join(out_dir, source_bname.replace(old_suffix, new_suffix))
+    out_file = op.join(out_dir, source_bname.replace(old_suffix, new_suffix)) + '.txt'
 
     # Copy in_file to deriv_dir/subj_dir/sess_dir/out_file
     logger.info(f'Copying {in_file} to {out_file}')

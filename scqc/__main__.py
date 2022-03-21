@@ -46,13 +46,10 @@ import argparse
 import pkg_resources
 from glob import glob
 
-import bids
-bids.config.set_option('extension_initial_dot', True)
-
 from niworkflows.utils.bids import (collect_participants)
 
 # Internal package imports
-from wf_scqc import build_wf_scqc
+from .wf_scqc import build_wf_scqc
 
 
 def main():
