@@ -1,4 +1,8 @@
-# Subcortical Quality Control for BOLD fMRI
-Simple pipeline for calculating various quality control measures specifically in subcortical human brain.
+# BOLD fMRI preprocessing pipeline tuned for subcortical slab acquisitions
 
-Implemented in nipype and depends on ANTs, AFNI and FSL
+* generates basic quality control metrics
+* uses TOPUP for SDC
+* supports complex-valued BOLD data
+
+Implemented in nipype
+Depends on ANTs, AFNI and FSL
