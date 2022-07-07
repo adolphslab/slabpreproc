@@ -4,5 +4,5 @@
 * uses TOPUP for SDC
 * supports complex-valued BOLD data
 
-Implemented in nipype
+Implemented in nipype  
 Depends on ANTs, AFNI and FSL
