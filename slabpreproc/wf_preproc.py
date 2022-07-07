@@ -2,7 +2,7 @@
 # coding: utf-8
 
 """
-Build the subcortical QC workflow
+Build the slab preprocessing workflow
 
 AUTHOR : Mike Tyszka
 PLACE  : Caltech Brain Imaging Center
@@ -40,7 +40,7 @@ from .wf_atlas import build_wf_atlas
 from .wf_derivatives import build_wf_derivatives
 
 
-def build_wf_scqc(work_dir, deriv_dir):
+def build_wf_preproc(work_dir, deriv_dir):
     """
     Build main subcortical QC workflow
 
@@ -70,12 +70,12 @@ def build_wf_scqc(work_dir, deriv_dir):
     wf_derivatives = build_wf_derivatives(deriv_dir)
 
     # Main subcortical QC workflow
-    wf_scqc = pe.Workflow(
+    wf_preproc = pe.Workflow(
         base_dir=str(work_dir),
-        name='wf_scqc'
+        name='wf_preproc'
     )
 
-    wf_scqc.connect([
+    wf_preproc.connect([
 
         # Pass images to preproc and atlas workflow
         (inputs, wf_func_preproc, [('bold', 'inputs.bold')]),
@@ -121,4 +121,4 @@ def build_wf_scqc(work_dir, deriv_dir):
         ]),
     ])
 
-    return wf_scqc
+    return wf_preproc

@@ -38,6 +38,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+
 import os
 import os.path as op
 from pathlib import Path
@@ -49,13 +50,13 @@ from glob import glob
 from niworkflows.utils.bids import (collect_participants)
 
 # Internal package imports
-from .wf_scqc import build_wf_scqc
+from .wf_preproc import build_wf_preproc
 
 
 def main():
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Lightweight subcortical fMRI quality control')
+    parser = argparse.ArgumentParser(description='Slab fMRI Preprocessing Pipeline')
     parser.add_argument('-d', '--bidsdir', default='.', help="BIDS dataset directory ['.']")
     parser.add_argument('-w', '--workdir', help='Work directory')
 
@@ -65,7 +66,7 @@ def main():
     bids_dir = Path(args.bidsdir)
 
     # Output derivatives folder
-    deriv_dir = bids_dir / 'derivatives' / 'scqc'
+    deriv_dir = bids_dir / 'derivatives' / 'slabpreproc'
     os.makedirs(deriv_dir, exist_ok=True)
 
     if args.workdir:
@@ -75,31 +76,29 @@ def main():
 
     # Get atlas T1 template and labels filenames from package data
     t1_atlas = pkg_resources.resource_filename(
-        'scqc',
+        'slabpreproc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz'
     )
     labels_atlas = pkg_resources.resource_filename(
-        'scqc',
+        'slabpreproc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_atlas-HOSPA_desc-th25_dseg.nii.gz'
     )
     probbrain_atlas = pkg_resources.resource_filename(
-        'scqc',
+        'slabpreproc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_desc-brain_probseg.nii.gz'
     )
 
-    print('Subcortical Quality Control')
+    print('Slab fMRI Preprocessing Pipeline')
     print(f'BIDS directory : {bids_dir}')
     print(f'Work directory : {work_dir}')
 
     subj_list = collect_participants(bids_dir=str(bids_dir))
 
-    # TODO Expand to all subject
+    # TODO Expand to all subjects
     subj_id = subj_list[0]
 
     # Get list of all magnitude BOLD series for this subject
     bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'func' / '*part-mag*_bold.nii.gz')))
-
-
 
     # Get list of all bias corrected RMS MEMPRAGE images for this subjec
     t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'anat' / '*rms*norm*T1w.nii.gz')))
@@ -114,7 +113,7 @@ def main():
         os.makedirs(this_work_dir, exist_ok=True)
 
         # Build the subcortical QC workflow
-        wf_scqc = build_wf_scqc(this_work_dir, deriv_dir)
+        wf_scqc = build_wf_preproc(this_work_dir, deriv_dir)
 
         # Supply input images
         wf_scqc.inputs.inputs.bold = bold

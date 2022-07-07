@@ -37,7 +37,7 @@ setup(
     # There are some restrictions on what makes a valid project name
     # specification here:
     # https://packaging.python.org/specifications/core-metadata/#name
-    name='scqc',  # Required
+    name='slabpreproc',  # Required
 
     # Versions should comply with PEP 440:
     # https://www.python.org/dev/peps/pep-0440/
@@ -45,12 +45,12 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='2022.2.11',  # Required
+    version='2022.7.7',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#summary
-    description='Subcortical fMRI QC',  # Optional
+    description='Slab fMRI Preprocessing Pipeline',  # Optional
 
     # This is an optional longer description of your project that represents
     # the body of text which users will see when they visit PyPI.
@@ -78,7 +78,7 @@ setup(
     #
     # This field corresponds to the "Home-Page" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#home-page-optional
-    url='https://github.com/jmtyszka/cbicqc',  # Optional
+    url='https://github.com/jmtyszka/slabpreproc',  # Optional
 
     # This should be your name or the name of the organization which owns the
     # project.
@@ -166,7 +166,7 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={
-        'scqc': ['atlas/*'],
+        'slabpreproc': ['atlas/*'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
@@ -188,7 +188,7 @@ setup(
     # executes the function `main` from this package when invoked:
     entry_points={  # Optional
         'console_scripts': [
-            'scqc=scqc.__main__:main',
+            'slabpreproc=slabpreproc.__main__:main',
         ],
     },
 
