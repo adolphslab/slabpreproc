@@ -1,4 +1,4 @@
-# BOLD fMRI preprocessing pipeline tuned for subcortical slab acquisitions
+# Slab fMRI Preprocessing Pipeline
 
 * generates basic quality control metrics
 * uses TOPUP for SDC
