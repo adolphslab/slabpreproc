@@ -39,6 +39,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import sys
 import os
 import os.path as op
 from pathlib import Path
@@ -50,7 +51,7 @@ from glob import glob
 from niworkflows.utils.bids import (collect_participants)
 
 # Internal package imports
-from .wf_preproc import build_wf_preproc
+from .wf_main import build_wf_main
 
 
 def main():
@@ -63,7 +64,7 @@ def main():
     # Parse command line arguments
     args = parser.parse_args()
 
-    bids_dir = Path(args.bidsdir)
+    bids_dir = Path(op.abspath(args.bidsdir))
 
     # Output derivatives folder
     deriv_dir = bids_dir / 'derivatives' / 'slabpreproc'
@@ -72,7 +73,8 @@ def main():
     if args.workdir:
         work_dir = Path(args.workdir)
     else:
-        work_dir = Path(tempfile.mkdtemp())
+        work_dir = Path(op.join(bids_dir, 'work'))
+        os.makedirs(work_dir, exist_ok=True)
 
     # Get atlas T1 template and labels filenames from package data
     t1_atlas = pkg_resources.resource_filename(
@@ -93,15 +95,19 @@ def main():
     print(f'Work directory : {work_dir}')
 
     subj_list = collect_participants(bids_dir=str(bids_dir))
+    assert len(subj_list) > 0
 
     # TODO Expand to all subjects
     subj_id = subj_list[0]
 
     # Get list of all magnitude BOLD series for this subject
-    bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'func' / '*part-mag*_bold.nii.gz')))
+    bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'func' / '*part-mag*_bold.nii*')))
+    assert len(bold_list) > 0
 
     # Get list of all bias corrected RMS MEMPRAGE images for this subjec
-    t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'anat' / '*rms*norm*T1w.nii.gz')))
+    t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'anat' / '*rms*norm*T1w.nii*')))
+    assert len(t1_list) > 0
+
     t1_ind = t1_list[0]
 
     # BOLD image loop
@@ -113,17 +119,17 @@ def main():
         os.makedirs(this_work_dir, exist_ok=True)
 
         # Build the subcortical QC workflow
-        wf_scqc = build_wf_preproc(this_work_dir, deriv_dir)
+        wf_main = build_wf_main(this_work_dir, deriv_dir)
 
         # Supply input images
-        wf_scqc.inputs.inputs.bold = bold
-        wf_scqc.inputs.inputs.t1_ind = t1_ind
-        wf_scqc.inputs.inputs.t1_atlas = t1_atlas
-        wf_scqc.inputs.inputs.labels_atlas = labels_atlas
+        wf_main.inputs.inputs.bold = bold
+        wf_main.inputs.inputs.t1_ind = t1_ind
+        wf_main.inputs.inputs.t1_atlas = t1_atlas
+        wf_main.inputs.inputs.labels_atlas = labels_atlas
 
         # Run workflow
         # Results are stored in BIDS derivatives folder
-        wf_scqc.run()
+        wf_main.run()
 
 
 if "__main__" in __name__:

@@ -184,13 +184,18 @@ def find_aux_files(bold):
 
     # Build BIDS layout
     bids_dir = op.dirname(op.dirname(op.dirname(op.dirname(bold))))
-    layout = bids.BIDSLayout(bids_dir)
+
+    logger.info(f'Indexing {bids_dir}')
+
+    layout = bids.BIDSLayout(bids_dir, validate=False)
 
     # Find EPI fieldmaps intended for this BOLD series (depends heavily on bidskit --bind-fmaps)
-    epi_fmaps = layout.get(datatype='fmap', suffix='epi', extension='.nii.gz')
+    epi_fmaps = layout.get(suffix='epi', extension='nii', regex_search=True)
 
+    logger.info(f'Found {len(epi_fmaps)} EPI fieldmaps')
+
+    # Find all SE-EPI fieldmaps with an IntendedFor field
     seepi_list = []
-
     for fmap in epi_fmaps:
         meta = fmap.get_metadata()
         if 'IntendedFor' in meta:
@@ -198,6 +203,8 @@ def find_aux_files(bold):
                 if bold_bname in target:
                     # Need to use .path not .filename
                     seepi_list.append(fmap.path)
+
+    assert len(seepi_list) > 0, "No SE-EPI fieldmaps with an IntendedFor field found"
 
     # Use AP SE-EPI as MOCO reference
     # TODO: Match SEEPI phase enc dir to BOLD

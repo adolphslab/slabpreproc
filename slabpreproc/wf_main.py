@@ -40,7 +40,7 @@ from .wf_atlas import build_wf_atlas
 from .wf_derivatives import build_wf_derivatives
 
 
-def build_wf_preproc(work_dir, deriv_dir):
+def build_wf_main(work_dir, deriv_dir):
     """
     Build main subcortical QC workflow
 
@@ -70,12 +70,12 @@ def build_wf_preproc(work_dir, deriv_dir):
     wf_derivatives = build_wf_derivatives(deriv_dir)
 
     # Main subcortical QC workflow
-    wf_preproc = pe.Workflow(
+    wf_main = pe.Workflow(
         base_dir=str(work_dir),
-        name='wf_preproc'
+        name='wf_main'
     )
 
-    wf_preproc.connect([
+    wf_main.connect([
 
         # Pass images to preproc and atlas workflow
         (inputs, wf_func_preproc, [('bold', 'inputs.bold')]),
@@ -121,4 +121,4 @@ def build_wf_preproc(work_dir, deriv_dir):
         ]),
     ])
 
-    return wf_preproc
+    return wf_main
