@@ -60,6 +60,7 @@ def main():
     parser = argparse.ArgumentParser(description='Slab fMRI Preprocessing Pipeline')
     parser.add_argument('-d', '--bidsdir', default='.', help="BIDS dataset directory ['.']")
     parser.add_argument('-w', '--workdir', help='Work directory')
+    parser.add_argument('-s', '--sub', required=True, help='Subject ID without sub- prefix')
 
     # Parse command line arguments
     args = parser.parse_args()
@@ -70,11 +71,19 @@ def main():
     deriv_dir = bids_dir / 'derivatives' / 'slabpreproc'
     os.makedirs(deriv_dir, exist_ok=True)
 
+    # Working directory
     if args.workdir:
         work_dir = Path(args.workdir)
     else:
         work_dir = Path(op.join(bids_dir, 'work'))
-        os.makedirs(work_dir, exist_ok=True)
+    os.makedirs(work_dir, exist_ok=True)
+
+    # Subject ID
+    subj_id = args.sub
+
+    # Expand to all subjects
+    # subj_list = collect_participants(bids_dir=str(bids_dir))
+    # assert len(subj_list) > 0
 
     # Get atlas T1 template and labels filenames from package data
     t1_atlas = pkg_resources.resource_filename(
@@ -93,12 +102,7 @@ def main():
     print('Slab fMRI Preprocessing Pipeline')
     print(f'BIDS directory : {bids_dir}')
     print(f'Work directory : {work_dir}')
-
-    subj_list = collect_participants(bids_dir=str(bids_dir))
-    assert len(subj_list) > 0
-
-    # TODO Expand to all subjects
-    subj_id = subj_list[0]
+    print(f'Subject ID     : {subj_id}')
 
     # Get list of all magnitude BOLD series for this subject
     bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'func' / '*part-mag*_bold.nii')))
