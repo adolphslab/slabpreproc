@@ -92,9 +92,12 @@ def build_wf_func_preproc():
     )
 
     # Motion correction : Align warped AP BOLD series to warped AP SBRef
+    # See FMRIB tech report for cost function performance
+    # https://www.fmrib.ox.ac.uk/datasets/techrep/tr02mj1/tr02mj1/node27.html
     mcflirt = pe.Node(
         fsl.MCFLIRT(
-            cost='mutualinfo'
+            cost='normcorr',
+            save_plots=True
         ),
         name='mcflirt'
     )
@@ -110,7 +113,7 @@ def build_wf_func_preproc():
     # Define outputs from preproc workflow
     outputs = pe.Node(
         util.IdentityInterface(
-            fields=('bold', 'sbref'),
+            fields=('bold', 'sbref', 'moco_pars'),
         ),
         name='outputs'
     )
@@ -157,8 +160,8 @@ def build_wf_func_preproc():
             ('out_movpar', 'in_topup_movpar')
         ]),
 
-
         # Output results
+        (mcflirt, outputs, [('par_file', 'moco_pars')]),
         (applytopup_sbref, outputs, [('out_corrected', 'sbref')]),
         (applytopup_bold, outputs, [('out_corrected', 'bold')]),
     ])
@@ -192,14 +195,18 @@ def find_aux_files(bold):
     # Find EPI fieldmaps intended for this BOLD series (depends heavily on bidskit --bind-fmaps)
     epi_fmaps = layout.get(suffix='epi', extension='nii', regex_search=True)
 
-    logger.info(f'Found {len(epi_fmaps)} EPI fieldmaps')
+    assert len(epi_fmaps) > 0, "No SE-EPI fieldmaps found"
 
     # Find all SE-EPI fieldmaps with an IntendedFor field
     seepi_list = []
     for fmap in epi_fmaps:
+        logger.info(f"*** Fieldmap : {fmap}")
         meta = fmap.get_metadata()
         if 'IntendedFor' in meta:
+            logger.info(f"*** IntendedFor : {meta['IntendedFor']}")
             for target in meta['IntendedFor']:
+                logger.info(f"*** BOLD Basename : {bold_bname}")
+                logger.info(f"*** IntendedFor Target : {target}")
                 if bold_bname in target:
                     # Need to use .path not .filename
                     seepi_list.append(fmap.path)

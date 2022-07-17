@@ -101,11 +101,11 @@ def main():
     subj_id = subj_list[0]
 
     # Get list of all magnitude BOLD series for this subject
-    bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'func' / '*part-mag*_bold.nii*')))
+    bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'func' / '*part-mag*_bold.nii')))
     assert len(bold_list) > 0
 
     # Get list of all bias corrected RMS MEMPRAGE images for this subjec
-    t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'anat' / '*rms*norm*T1w.nii*')))
+    t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'anat' / '*rms*norm*T1w.nii')))
     assert len(t1_list) > 0
 
     t1_ind = t1_list[0]
@@ -114,7 +114,7 @@ def main():
     for bold in bold_list:
 
         # Separate work folder for each BOLD image
-        bold_stub = op.basename(bold).replace('_bold.nii.gz', '')
+        bold_stub = op.basename(bold).replace('_bold.nii', '')
         this_work_dir = work_dir / bold_stub
         os.makedirs(this_work_dir, exist_ok=True)
 

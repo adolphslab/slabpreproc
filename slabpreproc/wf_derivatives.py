@@ -5,7 +5,7 @@
 Build workflow to name and place pipeline results appropriately in the BIDS derivatives folder
 Based on code fragments from https://github.com/nipreps/fmriprep/blob/master/fmriprep/workflows/bold/outputs.py
 """
-
+import bids.layout
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
 
@@ -31,6 +31,7 @@ def build_wf_derivatives(deriv_dir):
                 'bold_detrended',
                 'bold_tsfnr',
                 'bold_tsfnr_roistats',
+                'moco_pars',
                 't1_atlas2ind',
                 't1_ind2epi',
                 't1_atlas2epi',
@@ -91,6 +92,13 @@ def build_wf_derivatives(deriv_dir):
     ds_bold_tsfnr_roistats.inputs.new_suffix = 'recon-tsfnr_bold_roistats'
     ds_bold_tsfnr_roistats.inputs.datatype = 'qc'
 
+    ds_moco_pars= pe.Node(util.Function(
+        input_names=['source_file', 'in_file', 'deriv_dir', 'new_suffix', 'datatype'], output_names=[],
+        function=text_sink), name='ds_moco_pars')
+    ds_moco_pars.inputs.deriv_dir = deriv_dir
+    ds_moco_pars.inputs.new_suffix = 'recon-moco_bold_pars'
+    ds_moco_pars.inputs.datatype = 'qc'
+
     ds_t1_atlas2ind = pe.Node(util.Function(
         input_names=['source_file', 'in_file', 'deriv_dir', 'new_suffix', 'datatype'], output_names=[],
         function=bids_sink), name='ds_t1_atlas2ind')
@@ -120,6 +128,7 @@ def build_wf_derivatives(deriv_dir):
     ds_labels_atlas2epi.inputs.datatype = 'atlas'
 
     # Connect workflow
+    # source_file passed to all data sinks for use as a filename template
     wf_derivatives.connect([
         (inputs, ds_bold_preproc, [('source_file', 'source_file'), ('bold_preproc', 'in_file')]),
         (inputs, ds_sbref_preproc, [('source_file', 'source_file'), ('sbref_preproc', 'in_file')]),
@@ -127,6 +136,7 @@ def build_wf_derivatives(deriv_dir):
         (inputs, ds_bold_tsd, [('source_file', 'source_file'), ('bold_tsd', 'in_file')]),
         (inputs, ds_bold_detrended, [('source_file', 'source_file'), ('bold_detrended', 'in_file')]),
         (inputs, ds_bold_tsfnr, [('source_file', 'source_file'), ('bold_tsfnr', 'in_file')]),
+        (inputs, ds_moco_pars, [('source_file', 'source_file'), ('moco_pars', 'in_file')]),
         (inputs, ds_bold_tsfnr_roistats, [('source_file', 'source_file'), ('bold_tsfnr_roistats', 'in_file')]),
         (inputs, ds_t1_atlas2ind, [('source_file', 'source_file'), ('t1_atlas2ind', 'in_file')]),
         (inputs, ds_t1_ind2epi, [('source_file', 'source_file'), ('t1_ind2epi', 'in_file')]),
@@ -162,22 +172,28 @@ def bids_sink(source_file, in_file, deriv_dir, new_suffix, datatype):
 
     logger = logging.getLogger('nipype.interface')
 
-    # Source file basename (typically .nii.gz image)
+    # Source file basename (typically .nii or .nii.gz image)
     source_bname = op.basename(source_file)
 
     # Get entities from source_file
-    keys = bids.layout.parse_file_entities(source_file)
+    src_keys = bids.layout.parse_file_entities(source_file)
+    in_keys = bids.layout.parse_file_entities(in_file)
 
-    subj_id = keys['subject']
-    sess_id = keys['session']
-    old_suffix = keys['suffix']
+    subj_id = src_keys['subject']
+    sess_id = src_keys['session']
+
+    src_suffix = src_keys['suffix']
+    src_ext = src_keys['extension']
+
+    # Preserve extension from in_file
+    in_ext = in_keys['extension']
 
     # Create subject/session/datatype output folder
     out_dir = op.join(deriv_dir, 'sub-' + subj_id, 'ses-' + sess_id, datatype)
     makedirs(out_dir, exist_ok=True)
 
-    # Output file path. Replace current suffix with new suffix and add .txt extension
-    out_file = op.join(out_dir, source_bname.replace(old_suffix, new_suffix))
+    # Output file path. Replace current suffix+ext with new suffix+ext
+    out_file = op.join(out_dir, source_bname.replace(src_suffix+src_ext, new_suffix+in_ext))
 
     # Copy in_file to deriv_dir/subj_dir/sess_dir/out_file
     logger.info(f'Copying {in_file} to {out_file}')

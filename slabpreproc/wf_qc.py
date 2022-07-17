@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-# coding: utf-8
+"""
+Slab fMRI quality control workflow
+
+AUTHOR : Mike Tyszka
+PLACE  : Caltech
+"""
 
 import nipype.interfaces.afni as afni
 import nipype.interfaces.utility as util
@@ -25,7 +30,7 @@ def build_wf_qc():
         name='bold_tsfnr'
     )
 
-    # ROI tSFNR stats (mean, median, sd, min, max)
+    # ROI tSFNR stats (median, sd, min, max)
     # Inputs: in_file, mask
     # Outputs : out_file
     bold_tsfnr_roistats = pe.Node(

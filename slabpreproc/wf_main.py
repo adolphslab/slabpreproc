@@ -101,6 +101,7 @@ def build_wf_main(work_dir, deriv_dir):
         (wf_func_preproc, wf_derivatives, [
             ('outputs.bold', 'inputs.bold_preproc'),
             ('outputs.sbref', 'inputs.sbref_preproc'),
+            ('outputs.moco_pars', 'inputs.moco_pars')
         ]),
 
         # Write EPI-space atlas results to derivatives folder
