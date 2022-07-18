@@ -172,8 +172,10 @@ def build_wf_func_preproc():
 def find_aux_files(bold):
 
     import os.path as op
-    import bids
+    import json
+    from glob import glob
     from nipype import logging
+    from bids.layout import parse_file_entities
 
     # Create a logger for this function
     logger = logging.getLogger("nipype.interface")
@@ -184,32 +186,33 @@ def find_aux_files(bold):
 
     # SBRef by filename substitution
     sbref = bold.replace('_bold', '_sbref')
+    logger.info(f'SBRef : {sbref}')
 
-    # Build BIDS layout
-    bids_dir = op.dirname(op.dirname(op.dirname(op.dirname(bold))))
+    # Infer fmap directory for this subj/sess
+    fmap_dir = op.dirname(bold).replace('func', 'fmap')
+    logger.info(f'Fieldmap directory : {fmap_dir}')
 
-    logger.info(f'Indexing {bids_dir}')
+    # Find all SE-EPI fmaps
+    seepi_fnames = sorted(glob(op.join(fmap_dir, '*_epi.nii')))
+    assert len(seepi_fnames) > 0, "No SE-EPI fieldmaps found"
 
-    layout = bids.BIDSLayout(bids_dir, validate=False)
-
-    # Find EPI fieldmaps intended for this BOLD series (depends heavily on bidskit --bind-fmaps)
-    epi_fmaps = layout.get(suffix='epi', extension='nii', regex_search=True)
-
-    assert len(epi_fmaps) > 0, "No SE-EPI fieldmaps found"
+    logger.info(f'Found {len(seepi_fnames)} fieldmaps')
 
     # Find all SE-EPI fieldmaps with an IntendedFor field
     seepi_list = []
-    for fmap in epi_fmaps:
-        logger.info(f"*** Fieldmap : {fmap}")
-        meta = fmap.get_metadata()
+    for seepi_fname in seepi_fnames:
+
+        keys = parse_file_entities(seepi_fname)
+        seepi_json = seepi_fname.replace(keys['extension'], '.json')
+
+        logger.info(f'Attempting to load metadata from {seepi_json}')
+        with open(seepi_json, 'r') as fd:
+            meta = json.load(fd)
+
         if 'IntendedFor' in meta:
-            logger.info(f"*** IntendedFor : {meta['IntendedFor']}")
             for target in meta['IntendedFor']:
-                logger.info(f"*** BOLD Basename : {bold_bname}")
-                logger.info(f"*** IntendedFor Target : {target}")
                 if bold_bname in target:
-                    # Need to use .path not .filename
-                    seepi_list.append(fmap.path)
+                    seepi_list.append(seepi_fname)
 
     assert len(seepi_list) > 0, "No SE-EPI fieldmaps with an IntendedFor field found"
 
@@ -230,7 +233,8 @@ def get_topup_info(epis):
     :return: encoding_direction
     """
 
-    from niworkflows.utils.bids import get_metadata_for_nifti
+    import json
+    from bids.layout import parse_file_entities
 
     # Convert single strings into list of length 1
     if type(epis) == str:
@@ -242,11 +246,17 @@ def get_topup_info(epis):
     # Extract readout time and PE direction for each EPI image provided
     for epi_fname in epis:
 
-        t_ro = get_metadata_for_nifti(epi_fname, validate=False)['TotalReadoutTime']
+        keys = parse_file_entities(epi_fname)
+        epi_json = epi_fname.replace(keys['extension'], '.json')
+
+        with open(epi_json, 'r') as fd:
+            meta = json.load(fd)
+
+        t_ro = meta['TotalReadoutTime']
         readout_times.append(t_ro)
 
         # Convert BIDS PE direction (i, j, k) to FSL direction (x, y, z)
-        bids_pe_dir = get_metadata_for_nifti(epi_fname, validate=False)['PhaseEncodingDirection']
+        bids_pe_dir = meta['PhaseEncodingDirection']
         fsl_pe_dir = bids_pe_dir.replace('i', 'x').replace('j', 'y').replace('k', 'z')
         encoding_direction.append(fsl_pe_dir)
 
@@ -290,7 +300,7 @@ def make_encoding_file(readout_times, encoding_direction):
         # Add encoding row to encoding matrix
         enc_mat.append(v_enc)
 
-    # Store the encoding file in a temp folder
+    # Store the encoding file in a temp directory
     tmp_dir = Path(tempfile.mkdtemp())
     encoding_file = tmp_dir / 'topup_encoding_file.txt'
 

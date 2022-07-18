@@ -39,16 +39,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import sys
 import os
 import os.path as op
 from pathlib import Path
-import tempfile
 import argparse
 import pkg_resources
 from glob import glob
-
-from niworkflows.utils.bids import (collect_participants)
 
 # Internal package imports
 from .wf_main import build_wf_main
