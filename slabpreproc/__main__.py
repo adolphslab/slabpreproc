@@ -56,7 +56,8 @@ def main():
     parser = argparse.ArgumentParser(description='Slab fMRI Preprocessing Pipeline')
     parser.add_argument('-d', '--bidsdir', default='.', help="BIDS dataset directory ['.']")
     parser.add_argument('-w', '--workdir', help='Work directory')
-    parser.add_argument('-s', '--sub', required=True, help='Subject ID without sub- prefix')
+    parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
+    parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
 
     # Parse command line arguments
     args = parser.parse_args()
@@ -74,8 +75,9 @@ def main():
         work_dir = Path(op.join(bids_dir, 'work'))
     os.makedirs(work_dir, exist_ok=True)
 
-    # Subject ID
+    # Subject and session IDs
     subj_id = args.sub
+    sess_id = args.ses
 
     # Expand to all subjects
     # subj_list = collect_participants(bids_dir=str(bids_dir))
@@ -99,13 +101,14 @@ def main():
     print(f'BIDS directory : {bids_dir}')
     print(f'Work directory : {work_dir}')
     print(f'Subject ID     : {subj_id}')
+    print(f'Session ID     : {sess_id}')
 
     # Get list of all magnitude BOLD series for this subject
-    bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'func' / '*part-mag*_bold.nii')))
+    bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / f'ses-{sess_id}' / 'func' / '*part-mag*_bold.nii')))
     assert len(bold_list) > 0
 
     # Get list of all bias corrected RMS MEMPRAGE images for this subjec
-    t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / 'ses-*' / 'anat' / '*rms*norm*T1w.nii')))
+    t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / f'ses-{sess_id}' / 'anat' / '*rms*norm*T1w.nii')))
     assert len(t1_list) > 0
 
     t1_ind = t1_list[0]
