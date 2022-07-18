@@ -1,5 +1,6 @@
 # Slab fMRI Preprocessing Pipeline
 
+* Optimized for partial-brain slab coverage
 * generates basic quality control metrics
 * uses TOPUP for SDC
 * supports complex-valued BOLD data
