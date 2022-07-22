@@ -40,8 +40,11 @@ SOFTWARE.
 """
 
 import os
+import sys
+import re
 import os.path as op
 from pathlib import Path
+import bids
 import argparse
 import pkg_resources
 from glob import glob
@@ -62,6 +65,7 @@ def main():
     # Parse command line arguments
     args = parser.parse_args()
 
+    # BIDS dataset directory
     bids_dir = Path(op.abspath(args.bidsdir))
 
     # Output derivatives folder
@@ -102,6 +106,42 @@ def main():
     print(f'Work directory : {work_dir}')
     print(f'Subject ID     : {subj_id}')
     print(f'Session ID     : {sess_id}')
+
+    # Create BIDS layout indexer (highly recommend)
+    # Borrowed from fmriprep config class
+    bids_indexer = bids.BIDSLayoutIndexer(
+        validate=False,
+        ignore=(
+            "code",
+            "stimuli",
+            "sourcedata",
+            "models",
+            re.compile(r"^\."),
+            re.compile(
+                r"sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|dwi|eeg|ieeg|meg|perf)"
+            ),
+        ),
+    )
+
+    # Construct layout using indexer
+    print(f'\nIndexing {bids_dir}')
+    layout = bids.BIDSLayout(
+        str(bids_dir),
+        indexer=bids_indexer
+    )
+    print('Indexing completed')
+
+    # Get list of BOLD series
+    bold_list = layout.get(datatype='func', suffix='bold', part='mag', extension='.nii')
+    sbref_list = layout.get(datatype='func', suffix='sbref', part='mag', extension='.nii')
+
+    for f in bold_list:
+        print(f.filename)
+
+    for f in sbref_list:
+        print(f.filename)
+
+    sys.exit(0)
 
     # Get list of all magnitude BOLD series for this subject
     bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / f'ses-{sess_id}' / 'func' / '*part-mag*_bold.nii')))
