@@ -32,15 +32,15 @@ SOFTWARE.
 
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
-from .wf_qc import build_wf_qc
-from .wf_func_preproc import build_wf_func_preproc
-from .wf_atlas import build_wf_atlas
+from .qc import build_wf_qc
+from .func_preproc import build_wf_func_preproc
+from .atlas import build_wf_atlas
 
 # Internal package imports
-from .wf_derivatives import build_wf_derivatives
+from .derivatives import build_wf_derivatives
 
 
-def build_wf_main(work_dir, deriv_dir):
+def build_wf_toplevel(work_dir, deriv_dir, layout):
     """
     Build main subcortical QC workflow
 
@@ -48,6 +48,8 @@ def build_wf_main(work_dir, deriv_dir):
         Path to working directory
     :param deriv_dir: str
         Path to derivatives directory
+    :param layout: BIDSLayout
+        Prefilled layout for BIDS dataset
     :return:
     """
 
@@ -56,6 +58,9 @@ def build_wf_main(work_dir, deriv_dir):
         util.IdentityInterface(
             fields=[
                 'bold',
+                'sbref',
+                'sbref_wb',
+                'fmaps',
                 't1_ind',
                 't1_atlas',
                 'labels_atlas'

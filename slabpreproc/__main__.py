@@ -40,17 +40,15 @@ SOFTWARE.
 """
 
 import os
-import sys
 import re
 import os.path as op
 from pathlib import Path
 import bids
 import argparse
 import pkg_resources
-from glob import glob
 
-# Internal package imports
-from .wf_main import build_wf_main
+# Internal imports
+from .workflows import build_wf_toplevel
 
 
 def main():
@@ -61,6 +59,7 @@ def main():
     parser.add_argument('-w', '--workdir', help='Work directory')
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
+    parser.add_argument('--wb', required=True, help='Whole brain SBRef task ID')
 
     # Parse command line arguments
     args = parser.parse_args()
@@ -96,10 +95,6 @@ def main():
         'slabpreproc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_atlas-HOSPA_desc-th25_dseg.nii.gz'
     )
-    probbrain_atlas = pkg_resources.resource_filename(
-        'slabpreproc',
-        'atlas/tpl-MNI152NLin2009cAsym_res-02_desc-brain_probseg.nii.gz'
-    )
 
     print('Slab fMRI Preprocessing Pipeline')
     print(f'BIDS directory : {bids_dir}')
@@ -131,41 +126,65 @@ def main():
     )
     print('Indexing completed')
 
-    # Get list of BOLD series
-    bold_list = layout.get(datatype='func', suffix='bold', part='mag', extension='.nii')
-    sbref_list = layout.get(datatype='func', suffix='sbref', part='mag', extension='.nii')
+    # Get available image lists for this subject and session
+    bold_list = layout.get(
+        subject=subj_id, session=sess_id, datatype='func', suffix='bold', part='mag', extension='.nii'
+    )
+    assert len(bold_list) > 0, 'No BOLD EPI series found'
 
-    for f in bold_list:
-        print(f.filename)
+    t1_list = layout.get(
+        subject=subj_id, session=sess_id, datatype='anat', suffix='T1w', part='mag', extension='.nii'
+    )
+    assert len(t1_list) > 0, 'No T1w structural images found'
 
-    for f in sbref_list:
-        print(f.filename)
+    t2_list = layout.get(
+        subject=subj_id, session=sess_id, datatype='anat', suffix='T2w', extension='.nii'
+    )
+    assert len(t2_list) > 0, 'No T2w structural images found'
 
-    sys.exit(0)
+    sbref_wb = layout.get(
+        subject=subj_id, session=sess_id, datatype='func', task=args.wb, suffix='sbref', part='mag', extension='.nii'
+    )
 
-    # Get list of all magnitude BOLD series for this subject
-    bold_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / f'ses-{sess_id}' / 'func' / '*part-mag*_bold.nii')))
-    assert len(bold_list) > 0
-
-    # Get list of all bias corrected RMS MEMPRAGE images for this subjec
-    t1_list = sorted(glob(str(bids_dir / f'sub-{subj_id}' / f'ses-{sess_id}' / 'anat' / '*rms*norm*T1w.nii')))
-    assert len(t1_list) > 0
-
+    # Use first T1w image returned as individual anatomical reference
     t1_ind = t1_list[0]
 
     # BOLD image loop
     for bold in bold_list:
+
+        # Parse filename keys
+        keys = bids.layout.parse_file_entities(bold)
 
         # Separate work folder for each BOLD image
         bold_stub = op.basename(bold).replace('_bold.nii', '')
         this_work_dir = work_dir / bold_stub
         os.makedirs(this_work_dir, exist_ok=True)
 
+        # Find associated sbref and fmaps for this BOLD image
+        sbref = layout.get(
+            subject=subj_id, session=sess_id, datatype='func', suffix='sbref', part='mag', extension='.nii',
+            task=keys['task']
+        )
+        assert len(sbref) > 0, print('No SBRef found for this BOLD series')
+
+        fmaps = layout.get(
+            subject=subj_id, session=sess_id, datatype='fmap', suffix='epi', part='mag', extension='.nii',
+            acquisition=keys['task']
+        )
+        assert len(fmaps) == 2, 'Fewer than 2 SE-EPI fieldmaps found'
+
+        # Collect fmap metadata (for TOPUP)
+        fmaps_meta = [layout.get_metadata(fmap) for fmap in fmaps]
+
         # Build the subcortical QC workflow
-        wf_main = build_wf_main(this_work_dir, deriv_dir)
+        wf_main = build_wf_toplevel(this_work_dir, deriv_dir, layout)
 
         # Supply input images
         wf_main.inputs.inputs.bold = bold
+        wf_main.inputs.inputs.sbref = sbref
+        wf_main.inputs.inputs.sbref_wb = sbref_wb
+        wf_main.inputs.inputs.fmaps = fmaps
+        wf_main.inputs.inputs.fmaps_meta = fmaps_meta
         wf_main.inputs.inputs.t1_ind = t1_ind
         wf_main.inputs.inputs.t1_atlas = t1_atlas
         wf_main.inputs.inputs.labels_atlas = labels_atlas
