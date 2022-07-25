@@ -152,6 +152,9 @@ def main():
     # BOLD image loop
     for bold in bold_list:
 
+        # Get BOLD series metadata
+        bold_meta = bold.get_metadata()
+
         # Parse filename keys
         keys = bids.layout.parse_file_entities(bold)
 
@@ -160,12 +163,15 @@ def main():
         this_work_dir = work_dir / bold_stub
         os.makedirs(this_work_dir, exist_ok=True)
 
-        # Find associated sbref and fmaps for this BOLD image
+        # Get SBRef for this BOLD series
         sbref = layout.get(
             subject=subj_id, session=sess_id, datatype='func', suffix='sbref', part='mag', extension='.nii',
             task=keys['task']
         )
         assert len(sbref) > 0, print('No SBRef found for this BOLD series')
+
+        # SBRef metadata (should only be one)
+        sbref_meta = sbref[0].get_metadata()
 
         fmaps = layout.get(
             subject=subj_id, session=sess_id, datatype='fmap', suffix='epi', part='mag', extension='.nii',
@@ -173,15 +179,17 @@ def main():
         )
         assert len(fmaps) == 2, 'Fewer than 2 SE-EPI fieldmaps found'
 
-        # Collect fmap metadata (for TOPUP)
-        fmaps_meta = [layout.get_metadata(fmap) for fmap in fmaps]
+        # Compile list of fmap metadata
+        fmaps_meta = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
         wf_main = build_wf_toplevel(this_work_dir, deriv_dir, layout)
 
         # Supply input images
         wf_main.inputs.inputs.bold = bold
+        wf_main.inputs.inputs.bold_meta = bold_meta
         wf_main.inputs.inputs.sbref = sbref
+        wf_main.inputs.inputs.sbref_meta = sbref_meta
         wf_main.inputs.inputs.sbref_wb = sbref_wb
         wf_main.inputs.inputs.fmaps = fmaps
         wf_main.inputs.inputs.fmaps_meta = fmaps_meta

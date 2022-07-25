@@ -14,9 +14,9 @@ def build_wf_func_preproc():
     inputs = pe.Node(
         util.IdentityInterface(
             fields=(
-                'bold',
-                'sbref',
-                'fmaps',
+                'bold', 'bold_meta',
+                'sbref', 'sbref_meta',
+                'fmaps', 'fmaps_meta',
                 'anat')
         ),
         name='inputs'
@@ -95,8 +95,10 @@ def build_wf_func_preproc():
     wf_func_preproc.connect([
 
         # Create TOPUP encoding files
-        (inputs, sbref_enc_file, [('sbref', 'epis')]),
-        (inputs, seepi_enc_file, [('fmaps', 'epis')]),
+        (inputs, sbref_enc_file, [('sbref', 'epi_list')]),
+        (inputs, sbref_enc_file, [('sbref_meta', 'meta_list')]),
+        (inputs, seepi_enc_file, [('fmaps', 'epi_list')]),
+        (inputs, seepi_enc_file, [('fmaps_meta', 'meta_list')]),
 
         # Motion correct BOLD series
         (inputs, mcflirt, [('bold', 'in_file')]),

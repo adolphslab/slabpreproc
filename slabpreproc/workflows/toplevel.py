@@ -30,14 +30,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import nipype.interfaces.utility as util
-import nipype.pipeline.engine as pe
 from .qc import build_wf_qc
 from .func_preproc import build_wf_func_preproc
 from .atlas import build_wf_atlas
-
-# Internal package imports
 from .derivatives import build_wf_derivatives
+
+import nipype.interfaces.utility as util
+import nipype.pipeline.engine as pe
+
+# from nipype import config
+# config.enable_debug_mode()
 
 
 def build_wf_toplevel(work_dir, deriv_dir, layout):
@@ -57,10 +59,10 @@ def build_wf_toplevel(work_dir, deriv_dir, layout):
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
-                'bold',
-                'sbref',
+                'bold', 'bold_meta',
+                'sbref', 'sbref_meta',
                 'sbref_wb',
-                'fmaps',
+                'fmaps', 'fmaps_meta',
                 't1_ind',
                 't1_atlas',
                 'labels_atlas'
@@ -82,8 +84,15 @@ def build_wf_toplevel(work_dir, deriv_dir, layout):
 
     wf_main.connect([
 
-        # Pass images to preproc and atlas workflow
+        # Func preproc inputs
         (inputs, wf_func_preproc, [('bold', 'inputs.bold')]),
+        (inputs, wf_func_preproc, [('sbref', 'inputs.sbref')]),
+        (inputs, wf_func_preproc, [('fmaps', 'inputs.fmaps')]),
+        (inputs, wf_func_preproc, [('bold_meta', 'inputs.bold_meta')]),
+        (inputs, wf_func_preproc, [('sbref_meta', 'inputs.sbref_meta')]),
+        (inputs, wf_func_preproc, [('fmaps_meta', 'inputs.fmaps_meta')]),
+        (inputs, wf_func_preproc, [('t1_ind', 'inputs.anat')]),
+
         (inputs, wf_atlas, [
             ('t1_ind', 'inputs.t1_ind'),
             ('t1_atlas', 'inputs.t1_atlas'),
