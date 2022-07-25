@@ -67,7 +67,6 @@ def build_wf_func_preproc():
         fsl.MCFLIRT(
             cost='normcorr',
             dof=6,
-            mean_vol=True,
             save_plots=True
         ),
         name='mcflirt'

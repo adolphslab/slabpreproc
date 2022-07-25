@@ -39,6 +39,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from .workflows import build_wf_toplevel
+
 import os
 import re
 import os.path as op
@@ -47,8 +49,7 @@ import bids
 import argparse
 import pkg_resources
 
-# Internal imports
-from .workflows import build_wf_toplevel
+from nipype import (config, logging)
 
 
 def main():
@@ -78,6 +79,21 @@ def main():
         work_dir = Path(op.join(bids_dir, 'work'))
     os.makedirs(work_dir, exist_ok=True)
 
+    # Set debug mode and logging to work/ folder
+    config.enable_debug_mode()
+    config.set('execution', 'stop_on_first_crash', 'true')
+    config.set('execution', 'remove_unnecessary_outputs', 'false')
+    config.set('logging', 'workflow_level', 'DEBUG')
+    config.set('logging', 'interface_level', 'DEBUG')
+    config.set('logging', 'node_level', 'DEBUG')
+    config.update_config({
+        'logging': {
+            'log_directory': work_dir,
+            'log_to_file': True
+        }
+    })
+    logging.update_logging(config)
+
     # Subject and session IDs
     subj_id = args.sub
     sess_id = args.ses
@@ -87,11 +103,11 @@ def main():
     # assert len(subj_list) > 0
 
     # Get atlas T1 template and labels filenames from package data
-    t1_atlas = pkg_resources.resource_filename(
+    t1_atlas_path = pkg_resources.resource_filename(
         'slabpreproc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz'
     )
-    labels_atlas = pkg_resources.resource_filename(
+    labels_atlas_path = pkg_resources.resource_filename(
         'slabpreproc',
         'atlas/tpl-MNI152NLin2009cAsym_res-02_atlas-HOSPA_desc-th25_dseg.nii.gz'
     )
@@ -128,31 +144,37 @@ def main():
 
     # Get available image lists for this subject and session
     bold_list = layout.get(
-        subject=subj_id, session=sess_id, datatype='func', suffix='bold', part='mag', extension='.nii'
+        subject=subj_id, session=sess_id,
+        datatype='func', suffix='bold', part='mag', extension=['.nii', '.nii.gz']
     )
     assert len(bold_list) > 0, 'No BOLD EPI series found'
 
     t1_list = layout.get(
-        subject=subj_id, session=sess_id, datatype='anat', suffix='T1w', part='mag', extension='.nii'
+        subject=subj_id, session=sess_id,
+        datatype='anat', suffix='T1w', part='mag', extension=['.nii', '.nii.gz']
     )
     assert len(t1_list) > 0, 'No T1w structural images found'
+    t1_ind_path = t1_list[0].path
 
     t2_list = layout.get(
-        subject=subj_id, session=sess_id, datatype='anat', suffix='T2w', extension='.nii'
+        subject=subj_id, session=sess_id,
+        datatype='anat', suffix='T2w', extension=['.nii', '.nii.gz']
     )
     assert len(t2_list) > 0, 'No T2w structural images found'
+    t2_ind_path = t2_list[0].path
 
     sbref_wb = layout.get(
-        subject=subj_id, session=sess_id, datatype='func', task=args.wb, suffix='sbref', part='mag', extension='.nii'
+        subject=subj_id, session=sess_id,
+        datatype='func', task=args.wb, suffix='sbref', part='mag', extension=['.nii', '.nii.gz']
     )
+    sbref_wb_path = sbref_wb[0].path
 
-    # Use first T1w image returned as individual anatomical reference
-    t1_ind = t1_list[0]
 
     # BOLD image loop
     for bold in bold_list:
 
         # Get BOLD series metadata
+        bold_path = bold.path
         bold_meta = bold.get_metadata()
 
         # Parse filename keys
@@ -165,40 +187,44 @@ def main():
 
         # Get SBRef for this BOLD series
         sbref = layout.get(
-            subject=subj_id, session=sess_id, datatype='func', suffix='sbref', part='mag', extension='.nii',
+            subject=subj_id, session=sess_id,
+            datatype='func', suffix='sbref', part='mag', extension=['.nii', '.nii.gz'],
             task=keys['task']
         )
         assert len(sbref) > 0, print('No SBRef found for this BOLD series')
 
         # SBRef metadata (should only be one)
+        sbref_path = sbref[0].path
         sbref_meta = sbref[0].get_metadata()
 
         fmaps = layout.get(
-            subject=subj_id, session=sess_id, datatype='fmap', suffix='epi', part='mag', extension='.nii',
+            subject=subj_id, session=sess_id,
+            datatype='fmap', suffix='epi', part='mag', extension=['.nii', '.nii.gz'],
             acquisition=keys['task']
         )
         assert len(fmaps) == 2, 'Fewer than 2 SE-EPI fieldmaps found'
 
         # Compile list of fmap metadata
-        fmaps_meta = [fmap.get_metadata() for fmap in fmaps]
+        fmap_paths = [fmap.path for fmap in fmaps]
+        fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
         wf_main = build_wf_toplevel(this_work_dir, deriv_dir, layout)
 
         # Supply input images
-        wf_main.inputs.inputs.bold = bold
+        wf_main.inputs.inputs.bold = bold_path
         wf_main.inputs.inputs.bold_meta = bold_meta
-        wf_main.inputs.inputs.sbref = sbref
+        wf_main.inputs.inputs.sbref = sbref_path
         wf_main.inputs.inputs.sbref_meta = sbref_meta
-        wf_main.inputs.inputs.sbref_wb = sbref_wb
-        wf_main.inputs.inputs.fmaps = fmaps
-        wf_main.inputs.inputs.fmaps_meta = fmaps_meta
-        wf_main.inputs.inputs.t1_ind = t1_ind
-        wf_main.inputs.inputs.t1_atlas = t1_atlas
-        wf_main.inputs.inputs.labels_atlas = labels_atlas
+        wf_main.inputs.inputs.sbref_wb = sbref_wb_path
+        wf_main.inputs.inputs.fmaps = fmap_paths
+        wf_main.inputs.inputs.fmaps_meta = fmap_metas
+        wf_main.inputs.inputs.t1_ind = t1_ind_path
+        wf_main.inputs.inputs.t1_atlas = t1_atlas_path
+        wf_main.inputs.inputs.labels_atlas = labels_atlas_path
 
         # Run workflow
-        # Results are stored in BIDS derivatives folder
+        # Workflow outputs are stored in a BIDS derivatives folder
         wf_main.run()
 
 
