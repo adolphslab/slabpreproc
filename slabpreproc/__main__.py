@@ -47,7 +47,8 @@ import os.path as op
 from pathlib import Path
 import bids
 import argparse
-import pkg_resources
+import templateflow as tf
+# import pkg_resources
 
 from nipype import (config, logging)
 
@@ -98,19 +99,18 @@ def main():
     subj_id = args.sub
     sess_id = args.ses
 
-    # Expand to all subjects
-    # subj_list = collect_participants(bids_dir=str(bids_dir))
-    # assert len(subj_list) > 0
+    # Retired: Get atlas T1 template and labels filenames from package data
+    # t1_atlas_path = pkg_resources.resource_filename(
+    #     'slabpreproc',
+    #     'atlas/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz'
+    # )
+    # labels_atlas_path = pkg_resources.resource_filename(
+    #     'slabpreproc',
+    #     'atlas/tpl-MNI152NLin2009cAsym_res-02_atlas-HOSPA_desc-th25_dseg.nii.gz'
+    # )
 
-    # Get atlas T1 template and labels filenames from package data
-    t1_atlas_path = pkg_resources.resource_filename(
-        'slabpreproc',
-        'atlas/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz'
-    )
-    labels_atlas_path = pkg_resources.resource_filename(
-        'slabpreproc',
-        'atlas/tpl-MNI152NLin2009cAsym_res-02_atlas-HOSPA_desc-th25_dseg.nii.gz'
-    )
+    # Get T1 and T2 templates and subcortical labels from templateflow repo
+
 
     print('Slab fMRI Preprocessing Pipeline')
     print(f'BIDS directory : {bids_dir}')
