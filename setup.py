@@ -147,7 +147,8 @@ setup(
     install_requires=[
         'nipype',
         'pybids',
-        'niworkflows'
+        'niworkflows',
+        'templateflow'
     ],  # Optional
 
     # List additional groups of dependencies here (e.g. development

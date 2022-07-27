@@ -32,7 +32,7 @@ SOFTWARE.
 
 from .qc import build_wf_qc
 from .func_preproc import build_wf_func_preproc
-from .atlas import build_wf_atlas
+from .template import build_wf_template
 from .derivatives import build_wf_derivatives
 
 import nipype.interfaces.utility as util
@@ -61,79 +61,83 @@ def build_wf_toplevel(work_dir, deriv_dir, layout):
             fields=[
                 'bold', 'bold_meta',
                 'sbref', 'sbref_meta',
-                'sbref_wb',
                 'fmaps', 'fmaps_meta',
-                't1_ind',
-                't1_atlas',
-                'labels_atlas'
-            ]),
+                'ind_t1_brain', 'ind_t2_brain', 'ind_labels'
+            ]
+        ),
         name='inputs'
     )
 
-    # Build sub workflows
+    # Build sub-workflows
     wf_func_preproc = build_wf_func_preproc()
-    wf_atlas = build_wf_atlas()
+    wf_template = build_wf_template()
     wf_qc = build_wf_qc()
     wf_derivatives = build_wf_derivatives(deriv_dir)
 
-    # Main subcortical QC workflow
-    wf_main = pe.Workflow(
+    # Top level slab preproc workflow
+    wf_toplevel = pe.Workflow(
         base_dir=str(work_dir),
-        name='wf_main'
+        name='wf_toplevel'
     )
 
-    wf_main.connect([
+    wf_toplevel.connect([
 
         # Func preproc inputs
-        (inputs, wf_func_preproc, [('bold', 'inputs.bold')]),
-        (inputs, wf_func_preproc, [('sbref', 'inputs.sbref')]),
-        (inputs, wf_func_preproc, [('fmaps', 'inputs.fmaps')]),
-        (inputs, wf_func_preproc, [('bold_meta', 'inputs.bold_meta')]),
-        (inputs, wf_func_preproc, [('sbref_meta', 'inputs.sbref_meta')]),
-        (inputs, wf_func_preproc, [('fmaps_meta', 'inputs.fmaps_meta')]),
-        (inputs, wf_func_preproc, [('t1_ind', 'inputs.anat')]),
-
-        (inputs, wf_atlas, [
-            ('t1_ind', 'inputs.t1_ind'),
-            ('t1_atlas', 'inputs.t1_atlas'),
-            ('labels_atlas', 'inputs.labels_atlas')
+        (inputs, wf_func_preproc, [
+            ('bold', 'inputs.bold'),
+            ('sbref', 'inputs.sbref'),
+            ('fmaps', 'inputs.fmaps'),
+            ('bold_meta', 'inputs.bold_meta'),
+            ('sbref_meta', 'inputs.sbref_meta'),
+            ('fmaps_meta', 'inputs.fmaps_meta')
         ]),
 
-        # Pass fMRI preproc results to atlas workflow
-        (wf_func_preproc, wf_atlas, [('outputs.sbref', 'inputs.epi_ind')]),
+        # Pass T2w individual template to registration workflow
+        (inputs, wf_template, [
+            ('ind_t2_brain', 'inputs.ind_t2_brain'),
+        ]),
+
+        # Pass preprocessed (motion and distortion corrected) BOLD and SBRef
+        # to template registration workflow
+        (wf_func_preproc, wf_template, [
+            ('outputs.sbref', 'inputs.sbref')
+            ('outputs.bold', 'inputs.bold')
+        ]),
 
         # Pass fMRI preproc results to QC workflow
-        (wf_func_preproc, wf_qc, [('outputs.bold', 'inputs.bold')]),
+        (wf_func_preproc, wf_qc, [
+            ('outputs.bold', 'inputs.bold')
+        ]),
 
-        # Pass atlas labels to QC workflow
-        (wf_atlas, wf_qc, [('outputs.labels_atlas2epi', 'inputs.labels')]),
+        # Pass template labels to QC workflow
+        (wf_template, wf_qc, [
+            ('tpl_labels', 'inputs.tpl_labels')
+        ]),
 
         # Pass original BOLD filename as source file for derivatives output filenaming
-        (inputs, wf_derivatives, [('bold', 'inputs.source_file')]),
+        (inputs, wf_derivatives, [
+            ('bold', 'inputs.source_file')
+        ]),
 
-        # Write preproc results to derivatives folder
+        # Write preproc correction results to derivatives folder
         (wf_func_preproc, wf_derivatives, [
-            ('outputs.bold', 'inputs.bold_preproc'),
-            ('outputs.sbref', 'inputs.sbref_preproc'),
             ('outputs.moco_pars', 'inputs.moco_pars')
         ]),
 
-        # Write EPI-space atlas results to derivatives folder
-        (wf_atlas, wf_derivatives, [
-            ('outputs.t1_atlas2ind', 'inputs.t1_atlas2ind'),
-            ('outputs.t1_ind2epi', 'inputs.t1_ind2epi'),
-            ('outputs.t1_atlas2epi', 'inputs.t1_atlas2epi'),
-            ('outputs.labels_atlas2epi', 'inputs.labels_atlas2epi'),
+        # Write individual template space results to derivatives folder
+        (wf_template, wf_derivatives, [
+            ('outputs.tpl_bold', 'inputs.tpl_bold'),
+            ('outputs.tpl_sbref', 'inputs.tpl_sbref'),
         ]),
 
         # Write QC results to derivatives folder
         (wf_qc, wf_derivatives, [
-            ('outputs.bold_tmean', 'inputs.bold_tmean'),
-            ('outputs.bold_tsd', 'inputs.bold_tsd'),
-            ('outputs.bold_detrended', 'inputs.bold_detrended'),
-            ('outputs.bold_tsfnr', 'inputs.bold_tsfnr'),
-            ('outputs.bold_tsfnr_roistats', 'inputs.bold_tsfnr_roistats')
+            ('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean'),
+            ('outputs.tpl_bold_tsd', 'inputs.tpl_bold_tsd'),
+            ('outputs.tpl_bold_detrended', 'inputs.tpl_bold_detrended'),
+            ('outputs.tpl_bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
+            ('outputs.tpl_bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats')
         ]),
     ])
 
-    return wf_main
+    return wf_toplevel

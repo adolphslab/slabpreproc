@@ -3,17 +3,14 @@
 
 """
 Fast subcortical fMRI quality control
+- Grand reference to individual T2w template
+- BOLD EPI and SE-EPI fieldmaps referenced to BOLD SBRef
 - Distortion and head motion corrected BOLD series
 - BOLD tSD, tMean, tHPF and tSFNR
 
-TODO:
-- Individual EPI space hard atlas labels and soft brain mask
-- Baseline drift map
-- FD with and without low pass filtering
-
 Outputs QC results, motion and distortion corrected 4D BOLD series to derivatives
 
-AUTHOR : Mike Tyszka
+AUTHORS : Mike Tyszka and Yue Zhu
 PLACE  : Caltech Brain Imaging Center
 
 MIT License
@@ -47,8 +44,7 @@ import os.path as op
 from pathlib import Path
 import bids
 import argparse
-import templateflow as tf
-# import pkg_resources
+from templateflow import api as tflow
 
 from nipype import (config, logging)
 
@@ -99,24 +95,125 @@ def main():
     subj_id = args.sub
     sess_id = args.ses
 
-    # Retired: Get atlas T1 template and labels filenames from package data
-    # t1_atlas_path = pkg_resources.resource_filename(
-    #     'slabpreproc',
-    #     'atlas/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz'
-    # )
-    # labels_atlas_path = pkg_resources.resource_filename(
-    #     'slabpreproc',
-    #     'atlas/tpl-MNI152NLin2009cAsym_res-02_atlas-HOSPA_desc-th25_dseg.nii.gz'
-    # )
-
-    # Get T1 and T2 templates and subcortical labels from templateflow repo
-
-
+    # Summary splash text
     print('Slab fMRI Preprocessing Pipeline')
     print(f'BIDS directory : {bids_dir}')
     print(f'Work directory : {work_dir}')
     print(f'Subject ID     : {subj_id}')
     print(f'Session ID     : {sess_id}')
+
+    # Get T1 and T2 templates and subcortical labels from templateflow repo
+    # Individual custom templates and labels must have been set up in
+    # the TemplateFlow cache directory (typically $(HOME)/.cache/templateflow
+    tpl_t1_brain_path = tflow.get(
+        subj_id, desc='brain', resolution=1,
+        suffix='T1w', extension='nii.gz'
+    )
+
+    tpl_t2_brain_path = tflow.get(
+        subj_id, desc='brain', resolution=1,
+        suffix='T2w', extension='nii.gz'
+    )
+
+    tpl_labels_path = tflow.get(
+        subj_id, desc='', resolution=1,
+        suffix='dlabel', extension='nii.gz'
+    )
+
+    # Construct BIDS layout object for this dataset
+    layout = gen_bids_layout(bids_dir)
+
+    # Get available image lists for this subject and session
+    filter = {
+        'datatype': 'func',
+        'suffix': 'bold',
+        'part': 'mag',
+        'extension': ['.nii', '.nii.gz']
+    }
+    bold_list = layout.get(subject=subj_id, session=sess_id, **filter)
+    assert len(bold_list) > 0, 'No BOLD EPI series found'
+
+    #
+    # BOLD series loop
+    #
+
+    for bold in bold_list:
+
+        # Get BOLD series metadata
+        bold_path = bold.path
+        bold_meta = bold.get_metadata()
+
+        # Parse filename keys
+        keys = bids.layout.parse_file_entities(bold)
+
+        # Separate work folder for each BOLD image
+        bold_stub = op.basename(bold).split(".nii")[0]
+        this_work_dir = work_dir / bold_stub
+        os.makedirs(this_work_dir, exist_ok=True)
+
+        #
+        # Bound SBRef for this BOLD series
+        #
+
+        filter = {
+            'datatype': 'func',
+            'suffix': 'sbref',
+            'part': 'mag',
+            'extension': ['.nii', '.nii.gz'],
+            'task': keys['task']
+        }
+        sbref = layout.get(subject=subj_id, session=sess_id, **filter)
+
+        assert len(sbref) > 0, print('No SBRef found for this BOLD series')
+
+        # SBRef metadata (should only be one)
+        sbref_path = sbref[0].path
+        sbref_meta = sbref[0].get_metadata()
+
+        #
+        # Bound fieldmaps for this BOLD series
+        #
+
+        filter = {
+            'datatype': 'fmap',
+            'suffix': 'epi', 'part': 'mag', 'extension': ['.nii', '.nii.gz'],
+            'acquisition': keys['task']
+        }
+        fmaps = layout.get(subject=subj_id, session=sess_id, **filter)
+        assert len(fmaps) == 2, 'Fewer than 2 SE-EPI fieldmaps found'
+
+        # Create fieldmap path and metadata lists
+        fmap_paths = [fmap.path for fmap in fmaps]
+        fmap_metas = [fmap.get_metadata() for fmap in fmaps]
+
+        # Build the subcortical QC workflow
+        wf_toplevel = build_wf_toplevel(this_work_dir, deriv_dir, layout)
+
+        # Supply input images
+        wf_toplevel.inputs.inputs.bold = bold_path
+        wf_toplevel.inputs.inputs.bold_meta = bold_meta
+        wf_toplevel.inputs.inputs.sbref = sbref_path
+        wf_toplevel.inputs.inputs.sbref_meta = sbref_meta
+        wf_toplevel.inputs.inputs.fmaps = fmap_paths
+        wf_toplevel.inputs.inputs.fmaps_meta = fmap_metas
+        wf_toplevel.inputs.inputs.ind_t1_brain = tpl_t1_brain_path
+        wf_toplevel.inputs.inputs.ind_t2_brain = tpl_t2_brain_path
+        wf_toplevel.inputs.inputs.ind_labels = tpl_labels_path
+
+        # Run workflow
+        # Workflow outputs are stored in a BIDS derivatives folder
+        wf_toplevel.run()
+
+
+def gen_bids_layout(bids_dir):
+    """
+    Create the BIDS layout object for this dataset
+
+    :param bids_dir: str, pathlike
+        Root directory of BIDS dataset
+    :return: layout, BIDSLayout
+        BIDS layout object
+    """
 
     # Create BIDS layout indexer (highly recommend)
     # Borrowed from fmriprep config class
@@ -129,7 +226,7 @@ def main():
             "models",
             re.compile(r"^\."),
             re.compile(
-                r"sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|dwi|eeg|ieeg|meg|perf)"
+                r"sub-[a-zA-Z\d]+(/ses-[a-zA-Z\d]+)?/(beh|dwi|eeg|ieeg|meg|perf)"
             ),
         ),
     )
@@ -142,90 +239,7 @@ def main():
     )
     print('Indexing completed')
 
-    # Get available image lists for this subject and session
-    bold_list = layout.get(
-        subject=subj_id, session=sess_id,
-        datatype='func', suffix='bold', part='mag', extension=['.nii', '.nii.gz']
-    )
-    assert len(bold_list) > 0, 'No BOLD EPI series found'
-
-    t1_list = layout.get(
-        subject=subj_id, session=sess_id,
-        datatype='anat', suffix='T1w', part='mag', extension=['.nii', '.nii.gz']
-    )
-    assert len(t1_list) > 0, 'No T1w structural images found'
-    t1_ind_path = t1_list[0].path
-
-    t2_list = layout.get(
-        subject=subj_id, session=sess_id,
-        datatype='anat', suffix='T2w', extension=['.nii', '.nii.gz']
-    )
-    assert len(t2_list) > 0, 'No T2w structural images found'
-    t2_ind_path = t2_list[0].path
-
-    sbref_wb = layout.get(
-        subject=subj_id, session=sess_id,
-        datatype='func', task=args.wb, suffix='sbref', part='mag', extension=['.nii', '.nii.gz']
-    )
-    sbref_wb_path = sbref_wb[0].path
-
-
-    # BOLD image loop
-    for bold in bold_list:
-
-        # Get BOLD series metadata
-        bold_path = bold.path
-        bold_meta = bold.get_metadata()
-
-        # Parse filename keys
-        keys = bids.layout.parse_file_entities(bold)
-
-        # Separate work folder for each BOLD image
-        bold_stub = op.basename(bold).replace('_bold.nii', '')
-        this_work_dir = work_dir / bold_stub
-        os.makedirs(this_work_dir, exist_ok=True)
-
-        # Get SBRef for this BOLD series
-        sbref = layout.get(
-            subject=subj_id, session=sess_id,
-            datatype='func', suffix='sbref', part='mag', extension=['.nii', '.nii.gz'],
-            task=keys['task']
-        )
-        assert len(sbref) > 0, print('No SBRef found for this BOLD series')
-
-        # SBRef metadata (should only be one)
-        sbref_path = sbref[0].path
-        sbref_meta = sbref[0].get_metadata()
-
-        fmaps = layout.get(
-            subject=subj_id, session=sess_id,
-            datatype='fmap', suffix='epi', part='mag', extension=['.nii', '.nii.gz'],
-            acquisition=keys['task']
-        )
-        assert len(fmaps) == 2, 'Fewer than 2 SE-EPI fieldmaps found'
-
-        # Compile list of fmap metadata
-        fmap_paths = [fmap.path for fmap in fmaps]
-        fmap_metas = [fmap.get_metadata() for fmap in fmaps]
-
-        # Build the subcortical QC workflow
-        wf_main = build_wf_toplevel(this_work_dir, deriv_dir, layout)
-
-        # Supply input images
-        wf_main.inputs.inputs.bold = bold_path
-        wf_main.inputs.inputs.bold_meta = bold_meta
-        wf_main.inputs.inputs.sbref = sbref_path
-        wf_main.inputs.inputs.sbref_meta = sbref_meta
-        wf_main.inputs.inputs.sbref_wb = sbref_wb_path
-        wf_main.inputs.inputs.fmaps = fmap_paths
-        wf_main.inputs.inputs.fmaps_meta = fmap_metas
-        wf_main.inputs.inputs.t1_ind = t1_ind_path
-        wf_main.inputs.inputs.t1_atlas = t1_atlas_path
-        wf_main.inputs.inputs.labels_atlas = labels_atlas_path
-
-        # Run workflow
-        # Workflow outputs are stored in a BIDS derivatives folder
-        wf_main.run()
+    return layout
 
 
 if "__main__" in __name__:

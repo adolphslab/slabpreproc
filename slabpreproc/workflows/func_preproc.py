@@ -16,8 +16,7 @@ def build_wf_func_preproc():
             fields=(
                 'bold', 'bold_meta',
                 'sbref', 'sbref_meta',
-                'fmaps', 'fmaps_meta',
-                'anat')
+                'fmaps', 'fmaps_meta')
         ),
         name='inputs'
     )

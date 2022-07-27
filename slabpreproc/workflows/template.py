@@ -9,7 +9,7 @@ import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
 
-def build_wf_atlas():
+def build_wf_template():
 
     # Atlas inputs
     inputs = pe.Node(
