@@ -2,7 +2,7 @@
 # coding: utf-8
 
 """
-Build the slab preprocessing workflow
+Build the top level slab preprocessing workflow
 
 AUTHOR : Mike Tyszka
 PLACE  : Caltech Brain Imaging Center
@@ -100,8 +100,8 @@ def build_wf_toplevel(work_dir, deriv_dir, layout):
         # Pass preprocessed (motion and distortion corrected) BOLD and SBRef
         # to template registration workflow
         (wf_func_preproc, wf_template, [
-            ('outputs.sbref', 'inputs.sbref')
-            ('outputs.bold', 'inputs.bold')
+            ('outputs.sbref_preproc', 'inputs.sbref_preproc'),
+            ('outputs.bold_preproc', 'inputs.bold_preproc')
         ]),
 
         # Pass fMRI preproc results to QC workflow
