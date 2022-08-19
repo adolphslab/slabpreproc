@@ -78,6 +78,14 @@ def build_func_preproc_wf():
         name='topup_est'
     )
 
+    seepi_ref = pe.Node(
+        fsl.maths.MeanImage(
+            dimension='T',
+            output_type='NIFTI_GZ'
+        ),
+        name='seepi_ref'
+    )
+
     # Apply TOPUP correction to BOLD and SBRef
     unwarp_bold = pe.Node(
         fsl.ApplyTOPUP(
@@ -133,6 +141,9 @@ def build_func_preproc_wf():
         (concat, topup_est, [('merged_file', 'in_file')]),
         (seepi_enc_file, topup_est, [('encoding_file', 'encoding_file')]),
 
+        # Create SE-EPI reference (temporal mean of unwarped fmaps)
+        (topup_est, seepi_ref, [('out_corrected', 'in_file')]),
+
         # Apply TOPUP correction to motion corrected BOLD and SBRef
         (sbref_enc_file, unwarp_bold, [('encoding_file', 'encoding_file')]),
         (sbref_enc_file, unwarp_sbref, [('encoding_file', 'encoding_file')]),
@@ -142,7 +153,7 @@ def build_func_preproc_wf():
         # Output results
         (unwarp_bold, outputs, [('out_corrected', 'bold_preproc')]),
         (unwarp_sbref, outputs, [('out_corrected', 'sbref_preproc')]),
-        (topup_est, outputs, [('out_corrected', 'seepi_ref')]),
+        (seepi_ref, outputs, [('out_file', 'seepi_ref')]),
         (mcflirt, outputs, [('par_file', 'moco_pars')]),
     ])
 

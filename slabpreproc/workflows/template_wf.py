@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 """
-Register unwarped BOLD EPI space to individual T2w template via the unwarped SBRef
+Register unwarped BOLD EPI space to individual T2w template via the unwarped T2w mean SE-EPI
 - Final step of functional preprocessing following BOLD motion and distortion corrections
 """
 
@@ -57,9 +57,9 @@ def build_template_wf():
     outputs = pe.Node(
         util.IdentityInterface(
             fields=[
-                'tpl_seepi',
-                'tpl_sbref',
-                'tpl_bold'
+                'tpl_bold_preproc',
+                'tpl_sbref_preproc',
+                'tpl_seepi_ref',
             ]
         ),
         name='outputs'
@@ -85,9 +85,9 @@ def build_template_wf():
         (reg_seepi_tpl, resamp_sbref_tpl, [('out_matrix', 'transformation_series')]),
 
         # Output results
-        (reg_seepi_tpl, outputs, [('warped_image', 'tpl_seepi')]),
-        (resamp_bold_tpl, outputs, [('output_image', 'tpl_bold')]),
-        (resamp_sbref_tpl, outputs, [('output_image', 'tpl_sbref')]),
+        (resamp_bold_tpl, outputs, [('output_image', 'tpl_bold_preproc')]),
+        (resamp_sbref_tpl, outputs, [('output_image', 'tpl_sbref_preproc')]),
+        (reg_seepi_tpl, outputs, [('warped_image', 'tpl_seepi_ref')]),
 
     ])
 

@@ -103,18 +103,15 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
         # to template registration workflow
         (func_preproc_wf, template_wf, [
             ('outputs.sbref_preproc', 'inputs.sbref_preproc'),
-            ('outputs.bold_preproc', 'inputs.bold_preproc')
+            ('outputs.bold_preproc', 'inputs.bold_preproc'),
+            ('outputs.seepi_ref', 'inputs.seepi_ref')
         ]),
 
         # Pass fMRI preproc results to QC workflow
-        (func_preproc_wf, qc_wf, [
-            ('outputs.bold_preproc', 'inputs.bold')
-        ]),
+        (func_preproc_wf, qc_wf, [('outputs.bold_preproc', 'inputs.bold')]),
 
         # Pass template labels to QC workflow
-        (inputs, qc_wf, [
-            ('tpl_labels', 'inputs.labels')
-        ]),
+        (inputs, qc_wf, [('tpl_labels', 'inputs.labels')]),
 
         # Pass original BOLD filename as source file for derivatives output filenaming
         (inputs, derivatives_wf, [
@@ -128,9 +125,9 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
 
         # Write individual template space results to derivatives folder
         (template_wf, derivatives_wf, [
-            ('outputs.tpl_bold', 'inputs.tpl_bold'),
-            ('outputs.tpl_sbref', 'inputs.tpl_sbref'),
-            ('outputs.tpl_seepi', 'inputs.tpl_seepi'),
+            ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
+            ('outputs.tpl_sbref_preproc', 'inputs.tpl_sbref_preproc'),
+            ('outputs.tpl_seepi_ref', 'inputs.tpl_seepi_ref'),
         ]),
 
         # Write QC results to derivatives folder

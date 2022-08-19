@@ -59,6 +59,7 @@ def main():
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
     parser.add_argument('--wb', required=True, help='Whole brain SBRef task ID')
+    parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
 
     # Parse command line arguments
     args = parser.parse_args()
@@ -77,20 +78,21 @@ def main():
         work_dir = Path(op.join(bids_dir, 'work'))
     os.makedirs(work_dir, exist_ok=True)
 
-    # Set debug mode and logging to work/ folder
-    config.enable_debug_mode()
-    config.set('execution', 'stop_on_first_crash', 'true')
-    config.set('execution', 'remove_unnecessary_outputs', 'false')
-    config.set('logging', 'workflow_level', 'DEBUG')
-    config.set('logging', 'interface_level', 'DEBUG')
-    config.set('logging', 'node_level', 'DEBUG')
-    config.update_config({
-        'logging': {
-            'log_directory': work_dir,
-            'log_to_file': True
-        }
-    })
-    logging.update_logging(config)
+    # Set nipype debug mode and logging to work/ folder
+    if args.debug:
+        config.enable_debug_mode()
+        config.set('execution', 'stop_on_first_crash', 'true')
+        config.set('execution', 'remove_unnecessary_outputs', 'false')
+        config.set('logging', 'workflow_level', 'DEBUG')
+        config.set('logging', 'interface_level', 'DEBUG')
+        config.set('logging', 'node_level', 'DEBUG')
+        config.update_config({
+            'logging': {
+                'log_directory': work_dir,
+                'log_to_file': True
+            }
+        })
+        logging.update_logging(config)
 
     # Subject and session IDs
     subj_id = args.sub
@@ -102,6 +104,7 @@ def main():
     print(f'Work directory : {work_dir}')
     print(f'Subject ID     : {subj_id}')
     print(f'Session ID     : {sess_id}')
+    print(f'Debug mode     : {args.debug}')
 
     # Get T1 and T2 templates and subcortical labels from templateflow repo
     # Individual custom templates and labels must have been set up in
@@ -110,7 +113,7 @@ def main():
         subj_id, desc='brain', resolution=1,
         suffix='T1w', extension='nii.gz'
     )
-    if len(tpl_t1_brain_path) < 1:
+    if not tpl_t1_brain_path:
         print(f'* Could not find T1w template  - exiting')
         sys.exit(1)
 
@@ -118,15 +121,24 @@ def main():
         subj_id, desc='brain', resolution=1,
         suffix='T2w', extension='nii.gz'
     )
-    if len(tpl_t2_brain_path) < 1:
+    if not tpl_t2_brain_path:
         print(f'* Could not find T2w template - exiting')
         sys.exit(1)
 
-    tpl_labels_path = tflow.get(
-        subj_id, desc='', resolution=1,
-        suffix='dlabel', extension='nii.gz'
-    )
-    if len(tpl_labels_path) < 1:
+    # Just use the brain mask as a test label for now
+    if args.debug:
+        print('DEBUG: Using brain mask as single label')
+        tpl_labels_path = tflow.get(
+            subj_id, desc='brain', resolution=1,
+            suffix='mask', extension='nii.gz'
+        )
+    else:
+        tpl_labels_path = tflow.get(
+            subj_id, desc='', resolution=1,
+            suffix='dlabel', extension='nii.gz'
+        )
+
+    if not tpl_labels_path:
         print(f'* Could not find template labels - exiting')
         sys.exit(1)
 
@@ -162,7 +174,7 @@ def main():
         os.makedirs(this_work_dir, exist_ok=True)
 
         #
-        # Bound SBRef for this BOLD series
+        # Find SBRef for this BOLD series
         #
 
         filter = {
@@ -181,7 +193,7 @@ def main():
         sbref_meta = sbref[0].get_metadata()
 
         #
-        # Bound fieldmaps for this BOLD series
+        # Find fieldmaps for this BOLD series
         #
 
         filter = {
