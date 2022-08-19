@@ -5,7 +5,7 @@ import nipype.interfaces.afni as afni
 import nipype.pipeline.engine as pe
 
 
-def build_wf_alff():
+def build_alff_wf():
 
     wf_alff = pe.Workflow(name='wf_alff')
 

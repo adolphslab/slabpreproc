@@ -12,7 +12,7 @@ import nipype.algorithms.confounds as confounds
 import nipype.pipeline.engine as pe
 
 
-def build_wf_qc():
+def build_qc_wf():
 
     # QC inputs
     inputs = pe.Node(
@@ -55,9 +55,9 @@ def build_wf_qc():
     )
 
     # QC workflow setup
-    wf_qc = pe.Workflow(name='wf_qc')
+    qc_wf = pe.Workflow(name='qc_wf')
 
-    wf_qc.connect([
+    qc_wf.connect([
         (inputs, bold_tsfnr, [('bold', 'in_file')]),
 
         # Pass tSFNR and labels to ROI stats
@@ -72,7 +72,7 @@ def build_wf_qc():
         (bold_tsfnr_roistats, outputs, [('out_file', 'bold_tsfnr_roistats')])
     ])
 
-    return wf_qc
+    return qc_wf
 
 
 def estimate_noise_sigma():

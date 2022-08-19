@@ -10,27 +10,28 @@ import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
 
 
-def build_wf_derivatives(deriv_dir):
+def build_derivatives_wf(deriv_dir):
     """
     :param deriv_dir: Path object
         Absolute path to derivatives subfolder for this workflow
     :return: None
     """
 
-    wf_derivatives = pe.Workflow(name='wf_derivatives')
+    derivatives_wf = pe.Workflow(name='derivatives_wf')
 
     # Create input node for all expected subcortical QC results
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
                 'source_file',
-                'bold_preproc',
-                'sbref_preproc',
-                'bold_tmean',
-                'bold_tsd',
-                'bold_detrended',
-                'bold_tsfnr',
-                'bold_tsfnr_roistats',
+                'tpl_bold',
+                'tpl_sbref',
+                'tpl_seepi',
+                'tpl_bold_tmean',
+                'tpl_bold_tsd',
+                'tpl_bold_detrended',
+                'tpl_bold_tsfnr',
+                'tpl_bold_tsfnr_roistats',
                 'moco_pars',
                 't1_atlas2ind',
                 't1_ind2epi',
@@ -129,7 +130,7 @@ def build_wf_derivatives(deriv_dir):
 
     # Connect workflow
     # source_file passed to all data sinks for use as a filename template
-    wf_derivatives.connect([
+    derivatives_wf.connect([
         (inputs, ds_bold_preproc, [('source_file', 'source_file'), ('bold_preproc', 'in_file')]),
         (inputs, ds_sbref_preproc, [('source_file', 'source_file'), ('sbref_preproc', 'in_file')]),
         (inputs, ds_bold_tmean, [('source_file', 'source_file'), ('bold_tmean', 'in_file')]),
@@ -145,7 +146,7 @@ def build_wf_derivatives(deriv_dir):
 
     ])
 
-    return wf_derivatives
+    return derivatives_wf
 
 
 def bids_sink(source_file, in_file, deriv_dir, new_suffix, datatype):

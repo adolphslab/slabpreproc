@@ -36,9 +36,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from .workflows import build_wf_toplevel
+from .workflows import build_toplevel_wf
 
 import os
+import sys
 import re
 import os.path as op
 from pathlib import Path
@@ -109,16 +110,25 @@ def main():
         subj_id, desc='brain', resolution=1,
         suffix='T1w', extension='nii.gz'
     )
+    if len(tpl_t1_brain_path) < 1:
+        print(f'* Could not find T1w template  - exiting')
+        sys.exit(1)
 
     tpl_t2_brain_path = tflow.get(
         subj_id, desc='brain', resolution=1,
         suffix='T2w', extension='nii.gz'
     )
+    if len(tpl_t2_brain_path) < 1:
+        print(f'* Could not find T2w template - exiting')
+        sys.exit(1)
 
     tpl_labels_path = tflow.get(
         subj_id, desc='', resolution=1,
         suffix='dlabel', extension='nii.gz'
     )
+    if len(tpl_labels_path) < 1:
+        print(f'* Could not find template labels - exiting')
+        sys.exit(1)
 
     # Construct BIDS layout object for this dataset
     layout = gen_bids_layout(bids_dir)
@@ -187,22 +197,22 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        wf_toplevel = build_wf_toplevel(this_work_dir, deriv_dir, layout)
+        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, layout)
 
         # Supply input images
-        wf_toplevel.inputs.inputs.bold = bold_path
-        wf_toplevel.inputs.inputs.bold_meta = bold_meta
-        wf_toplevel.inputs.inputs.sbref = sbref_path
-        wf_toplevel.inputs.inputs.sbref_meta = sbref_meta
-        wf_toplevel.inputs.inputs.fmaps = fmap_paths
-        wf_toplevel.inputs.inputs.fmaps_meta = fmap_metas
-        wf_toplevel.inputs.inputs.ind_t1_brain = tpl_t1_brain_path
-        wf_toplevel.inputs.inputs.ind_t2_brain = tpl_t2_brain_path
-        wf_toplevel.inputs.inputs.ind_labels = tpl_labels_path
+        toplevel_wf.inputs.inputs.bold = bold_path
+        toplevel_wf.inputs.inputs.bold_meta = bold_meta
+        toplevel_wf.inputs.inputs.sbref = sbref_path
+        toplevel_wf.inputs.inputs.sbref_meta = sbref_meta
+        toplevel_wf.inputs.inputs.fmaps = fmap_paths
+        toplevel_wf.inputs.inputs.fmaps_meta = fmap_metas
+        toplevel_wf.inputs.inputs.tpl_t1_brain = tpl_t1_brain_path
+        toplevel_wf.inputs.inputs.tpl_t2_brain = tpl_t2_brain_path
+        toplevel_wf.inputs.inputs.tpl_labels = tpl_labels_path
 
         # Run workflow
         # Workflow outputs are stored in a BIDS derivatives folder
-        wf_toplevel.run()
+        toplevel_wf.run()
 
 
 def gen_bids_layout(bids_dir):
@@ -237,7 +247,7 @@ def gen_bids_layout(bids_dir):
         str(bids_dir),
         indexer=bids_indexer
     )
-    print('Indexing completed')
+    print('Indexing Complete')
 
     return layout
 
