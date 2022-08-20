@@ -89,12 +89,14 @@ def build_func_preproc_wf():
     # Apply TOPUP correction to BOLD and SBRef
     unwarp_bold = pe.Node(
         fsl.ApplyTOPUP(
+            method='jac',
             output_type='NIFTI_GZ'
         ),
         name='unwarp_bold'
     )
     unwarp_sbref = pe.Node(
         fsl.ApplyTOPUP(
+            method='jac',
             output_type='NIFTI_GZ'
         ),
         name='unwarp_sbref'
@@ -144,10 +146,20 @@ def build_func_preproc_wf():
         # Create SE-EPI reference (temporal mean of unwarped fmaps)
         (topup_est, seepi_ref, [('out_corrected', 'in_file')]),
 
-        # Apply TOPUP correction to motion corrected BOLD and SBRef
+        # Apply TOPUP correction to motion corrected BOLD
+        (topup_est, unwarp_bold, [
+            ('out_fieldcoef', 'in_topup_fieldcoef'),
+            ('out_movpar', 'in_topup_movpar')
+        ]),
         (sbref_enc_file, unwarp_bold, [('encoding_file', 'encoding_file')]),
-        (sbref_enc_file, unwarp_sbref, [('encoding_file', 'encoding_file')]),
         (mcflirt, unwarp_bold, [('out_file', 'in_files')]),
+
+        # Apply TOPUP correction to SBRef
+        (topup_est, unwarp_sbref, [
+            ('out_fieldcoef', 'in_topup_fieldcoef'),
+            ('out_movpar', 'in_topup_movpar')
+        ]),
+        (sbref_enc_file, unwarp_sbref, [('encoding_file', 'encoding_file')]),
         (inputs, unwarp_sbref, [('sbref', 'in_files')]),
 
         # Output results

@@ -114,7 +114,15 @@ def main():
         suffix='T1w', extension='nii.gz'
     )
     if not tpl_t1_brain_path:
-        print(f'* Could not find T1w template  - exiting')
+        print(f'* Could not find T1w brain template  - exiting')
+        sys.exit(1)
+
+    tpl_t2_head_path = tflow.get(
+        subj_id, desc=None, resolution=1,
+        suffix='T2w', extension='nii.gz'
+    )
+    if not tpl_t2_head_path:
+        print(f'* Could not find T2w head template - exiting')
         sys.exit(1)
 
     tpl_t2_brain_path = tflow.get(
@@ -122,7 +130,7 @@ def main():
         suffix='T2w', extension='nii.gz'
     )
     if not tpl_t2_brain_path:
-        print(f'* Could not find T2w template - exiting')
+        print(f'* Could not find T2w brain template - exiting')
         sys.exit(1)
 
     # Just use the brain mask as a test label for now
@@ -134,7 +142,7 @@ def main():
         )
     else:
         tpl_labels_path = tflow.get(
-            subj_id, desc='', resolution=1,
+            subj_id, desc=None, resolution=1,
             suffix='dlabel', extension='nii.gz'
         )
 
@@ -218,8 +226,7 @@ def main():
         toplevel_wf.inputs.inputs.sbref_meta = sbref_meta
         toplevel_wf.inputs.inputs.fmaps = fmap_paths
         toplevel_wf.inputs.inputs.fmaps_meta = fmap_metas
-        toplevel_wf.inputs.inputs.tpl_t1_brain = tpl_t1_brain_path
-        toplevel_wf.inputs.inputs.tpl_t2_brain = tpl_t2_brain_path
+        toplevel_wf.inputs.inputs.tpl_t2_head = tpl_t2_head_path
         toplevel_wf.inputs.inputs.tpl_labels = tpl_labels_path
 
         # Run workflow

@@ -100,17 +100,17 @@ def build_derivatives_wf(deriv_dir):
     derivatives_wf.connect([
 
         # Slab preproc results
-        (inputs, ds_bold_preproc, [('tpl_bold_preproc', 'in_file')]),
-        (inputs, ds_sbref_preproc, [('tpl_sbref_preproc', 'in_file')]),
-        (inputs, ds_seepi_ref, [('tpl_seepi_ref', 'in_file')]),
+        (inputs, ds_bold_preproc, [('source_file', 'source_file'), ('tpl_bold_preproc', 'in_file')]),
+        (inputs, ds_sbref_preproc, [('source_file', 'source_file'), ('tpl_sbref_preproc', 'in_file')]),
+        (inputs, ds_seepi_ref, [('source_file', 'source_file'), ('tpl_seepi_ref', 'in_file')]),
 
         # QC results
-        (inputs, ds_bold_tmean, [('tpl_bold_tmean', 'in_file')]),
-        (inputs, ds_bold_tsd, [('tpl_bold_tsd', 'in_file')]),
-        (inputs, ds_bold_detrended, [('tpl_bold_detrended', 'in_file')]),
-        (inputs, ds_bold_tsfnr, [('tpl_bold_tsfnr', 'in_file')]),
-        (inputs, ds_bold_tsfnr_roistats, [('tpl_bold_tsfnr_roistats', 'in_file')]),
-        (inputs, ds_moco_pars, [('moco_pars', 'in_file')]),
+        (inputs, ds_bold_tmean, [('source_file', 'source_file'), ('tpl_bold_tmean', 'in_file')]),
+        (inputs, ds_bold_tsd, [('source_file', 'source_file'), ('tpl_bold_tsd', 'in_file')]),
+        (inputs, ds_bold_detrended, [('source_file', 'source_file'), ('tpl_bold_detrended', 'in_file')]),
+        (inputs, ds_bold_tsfnr, [('source_file', 'source_file'), ('tpl_bold_tsfnr', 'in_file')]),
+        (inputs, ds_bold_tsfnr_roistats, [('source_file', 'source_file'), ('tpl_bold_tsfnr_roistats', 'in_file')]),
+        (inputs, ds_moco_pars, [('source_file', 'source_file'), ('moco_pars', 'in_file')]),
     ])
 
     return derivatives_wf

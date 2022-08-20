@@ -62,8 +62,7 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
                 'bold', 'bold_meta',
                 'sbref', 'sbref_meta',
                 'fmaps', 'fmaps_meta',
-                'tpl_t1_brain',
-                'tpl_t2_brain',
+                'tpl_t2_head',
                 'tpl_labels'
             ]
         ),
@@ -96,7 +95,7 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
 
         # Pass T2w individual template to registration workflow
         (inputs, template_wf, [
-            ('tpl_t2_brain', 'inputs.tpl_t2_brain'),
+            ('tpl_t2_head', 'inputs.tpl_t2_head'),
         ]),
 
         # Pass preprocessed (motion and distortion corrected) BOLD and SBRef

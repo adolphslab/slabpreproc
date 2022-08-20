@@ -19,7 +19,7 @@ def build_template_wf():
                 'bold_preproc',
                 'sbref_preproc',
                 'seepi_ref',
-                'tpl_t2_brain'
+                'tpl_t2_head'
             ]
         ),
         name='inputs'
@@ -37,19 +37,13 @@ def build_template_wf():
 
     # Resample 4D BOLD to individual template space
     resamp_bold_tpl = pe.Node(
-        ants.WarpTimeSeriesImageMultiTransform(
-            use_bspline=True,
-            num_threads=4
-        ),
+        ants.WarpTimeSeriesImageMultiTransform(num_threads=4),
         name='resamp_bold_tpl'
     )
 
     # Resample 3D SBRef to individual template space
     resamp_sbref_tpl = pe.Node(
-        ants.WarpImageMultiTransform(
-            use_bspline=True,
-            num_threads=4
-        ),
+        ants.WarpImageMultiTransform(num_threads=4),
         name='resamp_sbref_tpl'
     )
 
@@ -72,17 +66,19 @@ def build_template_wf():
 
         # Register SE-EPI unwarped midspace to individual template space
         (inputs, reg_seepi_tpl, [
-            ('tpl_t2_brain', 'fixed_image'),
+            ('tpl_t2_head', 'fixed_image'),
             ('seepi_ref', 'moving_image')
         ]),
 
         # Resample unwarped BOLD to template space
         (inputs, resamp_bold_tpl, [('bold_preproc', 'input_image')]),
         (reg_seepi_tpl, resamp_bold_tpl, [('out_matrix', 'transformation_series')]),
+        (inputs, resamp_bold_tpl, [('tpl_t2_head', 'reference_image')]),
 
         # Resample unwarped SBref to template space
         (inputs, resamp_sbref_tpl, [('sbref_preproc', 'input_image')]),
         (reg_seepi_tpl, resamp_sbref_tpl, [('out_matrix', 'transformation_series')]),
+        (inputs, resamp_sbref_tpl, [('tpl_t2_head', 'reference_image')]),
 
         # Output results
         (resamp_bold_tpl, outputs, [('output_image', 'tpl_bold_preproc')]),
