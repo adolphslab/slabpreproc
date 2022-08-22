@@ -5,9 +5,11 @@ Functional MRI preprocessing workflow
 
 import nipype.interfaces.utility as util
 import nipype.interfaces.fsl as fsl
+import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
 from ..interfaces import TOPUPEncFile
+from ..interfaces import FMAPRef
 
 
 def build_func_preproc_wf():
@@ -23,7 +25,23 @@ def build_func_preproc_wf():
         name='inputs'
     )
 
-    # Motion correction of warped BOLD series using the warped SBRef as reference
+    # Identify SE-EPI fieldmap with same PE direction as SBRef
+    fmap_ref = pe.Node(
+
+    )
+
+    # Rigid-body pre-align SBRef to FMAPRef prior to motion correction of BOLD
+    # timeseries to SBRef.
+    sbref2fmap = pe.Node(
+        ants.RegistrationSynQuick(
+            transform_type='r',
+            num_threads=4
+        ),
+        name='sbref2fmap',
+        terminal_output=None
+    )
+
+    # Motion correction of warped BOLD series using the warped, fmap-aligned SBRef as reference
     # See FMRIB tech report for relative cost function performance
     # https://www.fmrib.ox.ac.uk/datasets/techrep/tr02mj1/tr02mj1/node27.html
 
@@ -122,7 +140,15 @@ def build_func_preproc_wf():
 
     func_preproc_wf.connect([
 
-        # Motion correct BOLD series to the SBRef image
+        # Extract the first fmap in the list to use as a BOLD to fmap registration reference
+        (inputs, fmap_ref, [('fmaps', 'inlist')]),
+
+        # Register the SBRef to the SE-EPI with the same PE direction
+        (inputs, sbref2fmap, [
+            ('sbref', 'sbref'),
+        ])
+
+        # Motion correct BOLD series to the fmap-aligned SBRef image
         (inputs, mcflirt, [
             ('bold', 'in_file'),
             ('sbref', 'ref_file')
@@ -134,9 +160,6 @@ def build_func_preproc_wf():
         (inputs, sbref_enc_file, [('sbref_meta', 'meta_list')]),
         (inputs, seepi_enc_file, [('fmaps', 'epi_list')]),
         (inputs, seepi_enc_file, [('fmaps_meta', 'meta_list')]),
-
-        # Extract the first fmap in the list to use as a BOLD to fmap registration reference
-        (inputs, fmap_ref, [('fmaps', 'inlist')]),
 
         # Estimate TOPUP corrections from fmap images
         (inputs, concat, [('fmaps', 'in_files')]),
