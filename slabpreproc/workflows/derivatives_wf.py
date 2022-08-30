@@ -8,7 +8,7 @@ Build workflow to name and place pipeline results appropriately in the BIDS deri
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
 
-from ..interfaces.derivatives import BIDSDerivSink
+from ..interfaces.derivatives import DerivativesSorter
 
 
 def build_derivatives_wf(deriv_dir):
@@ -27,7 +27,7 @@ def build_derivatives_wf(deriv_dir):
                 'source_file',
                 'tpl_bold_preproc',
                 'tpl_sbref_preproc',
-                'tpl_seepi_ref',
+                'tpl_seepi_unwarp_mean',
                 'tpl_bold_tmean',
                 'tpl_bold_tsd',
                 'tpl_bold_detrended',
@@ -38,79 +38,58 @@ def build_derivatives_wf(deriv_dir):
         name='inputs'
     )
 
-    # Build individual data sinks for each input
-    # Allows for renaming and sorting into directories
+    # Sorting info
+    sort_dict_list = [
+        {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_bold', 'FileType': 'Image'},
+        {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_sbref', 'FileType': 'Image'},
+        {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_seepi_unwarp_mean', 'FileType': 'Image'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-tmean_bold', 'FileType': 'Image'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-tsd_bold', 'FileType': 'Image'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-detrended_bold', 'FileType': 'Image'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-tsfnr_bold', 'FileType': 'Image'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-tsfnr_bold_roistats', 'FileType': 'Text'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-moco_bold_pars', 'FileType': 'Text'},
+    ]
 
-    ds_bold_preproc = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='preproc',
-        new_suffix='recon-preproc_bold'
-    ), name='ds_bold_preproc')
+    # Create a list of all inputs
+    deriv_list = pe.Node(
+        util.Merge(numinputs=9),
+        name='deriv_list'
+    )
 
-    ds_sbref_preproc = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='preproc',
-        new_suffix='recon-preproc_sbref'
-    ), name='ds_sbref_preproc')
-
-    ds_seepi_ref = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='preproc',
-        new_suffix='recon-preproc_seepi'
-    ), name='ds_seepi_ref')
-
-    ds_bold_tmean = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='qc',
-        new_suffix='recon-tmean_bold'
-    ), name='ds_bold_tmean')
-
-    ds_bold_tsd = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='qc',
-        new_suffix='recon-tsd_bold'
-    ), name='ds_bold_tsd')
-
-    ds_bold_detrended = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='qc',
-        new_suffix='recon-detrended_bold'
-    ), name='ds_bold_detrended')
-
-    ds_bold_tsfnr = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='qc',
-        new_suffix='recon-tsfnr_bold'
-    ), name='ds_bold_tsfnr')
-
-    ds_bold_tsfnr_roistats = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='qc',
-        new_suffix='recon-tsfnr_bold_roistats'
-    ), name='ds_bold_tsfnr_roistats')
-
-    ds_moco_pars = pe.Node(BIDSDerivSink(
-        deriv_dir=deriv_dir,
-        data_type='qc',
-        new_suffix='recon-moco_bold_pars'
-    ), name='ds_moco_pars')
+    # Build multi-input derivatives output sorter
+    # Renames and sorts inputs into correct derivatives heirarchy
+    deriv_sorter = pe.Node(
+        DerivativesSorter(
+            deriv_dir=deriv_dir,
+            sort_dict_list=sort_dict_list
+        ),
+        name='deriv_sorter'
+    )
 
     # Connect workflow
     # source_file passed to all data sinks for use as a filename template
     derivatives_wf.connect([
 
-        # Slab preproc results
-        (inputs, ds_bold_preproc, [('source_file', 'source_file'), ('tpl_bold_preproc', 'in_file')]),
-        (inputs, ds_sbref_preproc, [('source_file', 'source_file'), ('tpl_sbref_preproc', 'in_file')]),
-        (inputs, ds_seepi_ref, [('source_file', 'source_file'), ('tpl_seepi_ref', 'in_file')]),
+        # Slab preproc and QC results to BIDS derivatives sorter
+        (inputs, deriv_sorter, [('source_file', 'source_file')]),
 
-        # QC results
-        (inputs, ds_bold_tmean, [('source_file', 'source_file'), ('tpl_bold_tmean', 'in_file')]),
-        (inputs, ds_bold_tsd, [('source_file', 'source_file'), ('tpl_bold_tsd', 'in_file')]),
-        (inputs, ds_bold_detrended, [('source_file', 'source_file'), ('tpl_bold_detrended', 'in_file')]),
-        (inputs, ds_bold_tsfnr, [('source_file', 'source_file'), ('tpl_bold_tsfnr', 'in_file')]),
-        (inputs, ds_bold_tsfnr_roistats, [('source_file', 'source_file'), ('tpl_bold_tsfnr_roistats', 'in_file')]),
-        (inputs, ds_moco_pars, [('source_file', 'source_file'), ('moco_pars', 'in_file')]),
+        # Create file list
+        (inputs, deriv_list, [
+            ('tpl_bold_preproc', 'in1'),
+            ('tpl_sbref_preproc', 'in2'),
+            ('tpl_seepi_unwarp_mean', 'in3'),
+            ('tpl_bold_tmean', 'in4'),
+            ('tpl_bold_tsd', 'in5'),
+            ('tpl_bold_detrended', 'in6'),
+            ('tpl_bold_tsfnr', 'in7'),
+            ('tpl_bold_tsfnr_roistats', 'in8'),
+            ('moco_pars', 'in9')
+        ]),
+
+        # Pass file list to sorter
+        (deriv_list, deriv_sorter, [('out', 'file_list')])
+
     ])
 
     return derivatives_wf

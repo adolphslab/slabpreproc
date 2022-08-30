@@ -9,7 +9,10 @@ import nipype.interfaces.ants as ants
 import nipype.pipeline.engine as pe
 
 from ..interfaces import TOPUPEncFile
-from ..interfaces import FMAPRef
+from ..interfaces import SEEPIRef
+
+# For later single warp registration of BOLD volumes to individual structural space
+# from niworkflows.interfaces.itk import MCFLIRT2ITK
 
 
 def build_func_preproc_wf():
@@ -20,24 +23,22 @@ def build_func_preproc_wf():
             fields=(
                 'bold', 'bold_meta',
                 'sbref', 'sbref_meta',
-                'fmaps', 'fmaps_meta')
+                'seepis', 'seepis_meta')
         ),
         name='inputs'
     )
 
-    # Identify SE-EPI fieldmap with same PE direction as SBRef
-    fmap_ref = pe.Node(
+    # Identify SE-EPI fieldmap with same PE direction as BOLD SBRef
+    get_seepi_ref = pe.Node(SEEPIRef(), name='seepi_ref')
 
-    )
-
-    # Rigid-body pre-align SBRef to FMAPRef prior to motion correction of BOLD
+    # Rigid-body pre-align SBRef to SEEPIRef prior to motion correction of BOLD
     # timeseries to SBRef.
-    sbref2fmap = pe.Node(
+    sbref2seepi = pe.Node(
         ants.RegistrationSynQuick(
             transform_type='r',
             num_threads=4
         ),
-        name='sbref2fmap',
+        name='sbref2seepi',
         terminal_output=None
     )
 
@@ -68,14 +69,6 @@ def build_func_preproc_wf():
         name='sbref_enc_file'
     )
 
-    # Make the first fmap in the list the registration reference
-    # Assumed to have the same PE direction as the BOLD series
-    # TODO: check that the first fmap PE direction matches that of the BOLD series
-    fmap_ref = pe.Node(
-        util.Select(index=[0]),
-        name='get_fmap_ref'
-    )
-
     # Concatenate SE-EPI images into a single 4D image
     # Required for FSL TOPUP implementation
     concat = pe.Node(
@@ -96,12 +89,12 @@ def build_func_preproc_wf():
         name='topup_est'
     )
 
-    seepi_ref = pe.Node(
+    seepi_unwarp_mean = pe.Node(
         fsl.maths.MeanImage(
             dimension='T',
             output_type='NIFTI_GZ'
         ),
-        name='seepi_ref'
+        name='seepi_unwarp_mean'
     )
 
     # Apply TOPUP correction to BOLD and SBRef
@@ -126,7 +119,7 @@ def build_func_preproc_wf():
             fields=(
                 'bold_preproc',
                 'sbref_preproc',
-                'seepi_ref',
+                'seepi_unwarp_mean',
                 'moco_pars'),
         ),
         name='outputs'
@@ -141,33 +134,34 @@ def build_func_preproc_wf():
     func_preproc_wf.connect([
 
         # Extract the first fmap in the list to use as a BOLD to fmap registration reference
-        (inputs, fmap_ref, [('fmaps', 'inlist')]),
+        (inputs, get_seepi_ref, [
+            ('seepis', 'seepis'),
+            ('seepis_meta', 'seepis_meta'),
+            ('sbref_meta', 'sbref_meta')
+        ]),
 
         # Register the SBRef to the SE-EPI with the same PE direction
-        (inputs, sbref2fmap, [
-            ('sbref', 'sbref'),
-        ])
+        (inputs, sbref2seepi, [('sbref', 'moving_image')]),
+        (get_seepi_ref, sbref2seepi, [('seepi_ref', 'fixed_image')]),
 
         # Motion correct BOLD series to the fmap-aligned SBRef image
-        (inputs, mcflirt, [
-            ('bold', 'in_file'),
-            ('sbref', 'ref_file')
-        ]),
+        (inputs, mcflirt, [('bold', 'in_file')]),
+        (sbref2seepi, mcflirt, [('warped_image', 'ref_file')]),
 
         # Create TOPUP encoding files
         # Requires both the image to be unwarped and the metadata for that image
         (inputs, sbref_enc_file, [('sbref', 'epi_list')]),
         (inputs, sbref_enc_file, [('sbref_meta', 'meta_list')]),
-        (inputs, seepi_enc_file, [('fmaps', 'epi_list')]),
-        (inputs, seepi_enc_file, [('fmaps_meta', 'meta_list')]),
+        (inputs, seepi_enc_file, [('seepis', 'epi_list')]),
+        (inputs, seepi_enc_file, [('seepis_meta', 'meta_list')]),
 
         # Estimate TOPUP corrections from fmap images
-        (inputs, concat, [('fmaps', 'in_files')]),
+        (inputs, concat, [('seepis', 'in_files')]),
         (concat, topup_est, [('merged_file', 'in_file')]),
         (seepi_enc_file, topup_est, [('encoding_file', 'encoding_file')]),
 
-        # Create SE-EPI reference (temporal mean of unwarped fmaps)
-        (topup_est, seepi_ref, [('out_corrected', 'in_file')]),
+        # Create SE-EPI reference (temporal mean of unwarped seepis)
+        (topup_est, seepi_unwarp_mean, [('out_corrected', 'in_file')]),
 
         # Apply TOPUP correction to motion corrected BOLD
         (topup_est, unwarp_bold, [
@@ -188,7 +182,7 @@ def build_func_preproc_wf():
         # Output results
         (unwarp_bold, outputs, [('out_corrected', 'bold_preproc')]),
         (unwarp_sbref, outputs, [('out_corrected', 'sbref_preproc')]),
-        (seepi_ref, outputs, [('out_file', 'seepi_ref')]),
+        (seepi_unwarp_mean, outputs, [('out_file', 'seepi_unwarp_mean')]),
         (mcflirt, outputs, [('par_file', 'moco_pars')]),
     ])
 

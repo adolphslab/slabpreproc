@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """
 Slab fMRI quality control workflow
+Expects unwarped, motion corrected BOLD data in the individual's anatomic space
+Deterministic labels should be provided in the same individual anatomic space.
 
 AUTHOR : Mike Tyszka
 PLACE  : Caltech

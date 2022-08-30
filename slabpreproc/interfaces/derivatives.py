@@ -32,54 +32,50 @@ Populate correct derivatives subfolder with input data file
 """
 
 
-class BIDSDerivSinkInputSpec(BaseInterfaceInputSpec):
+class DerivativesSorterInputSpec(BaseInterfaceInputSpec):
 
-    in_file = File(desc="File to place in derivatives folder", exists=True)
-    source_file = File(desc="Source BOLD image for reference", exists=True)
-    deriv_dir = Directory(desc="BIDS derivatives folder", exists=True)
-    data_type = Str(desc="Type of output data (preproc, qc)")
-    new_suffix = Str(desc="Replacement filename suffix")
+    deriv_dir = Directory(
+        desc="BIDS derivatives folder",
+        exists=True)
+
+    source_file = File(
+        desc="Source BOLD image for reference",
+        exists=True)
+
+    file_list = InputMultiPath(
+        File(exists=True),
+        copyfile=False,
+        desc='List of files to sort into derivatives folder',
+        mandatory=True
+    )
+
+    sort_dict_list = InputMultiObject(
+        traits.DictStrAny,
+        mandatory=True,
+        desc="List of sorting info dictionaries corresponding to file_list",
+    )
 
 
-class BIDSDerivSinkOutputSpec(TraitedSpec):
+class DerivativesSorterOutputSpec(TraitedSpec):
 
-    out_file = File(desc="Derivatives output file path", exists=True)
+    # Dummy output
+    out_file = traits.Any(desc="Derivatives sorter dummy output")
 
 
-class BIDSDerivSink(BaseInterface):
+class DerivativesSorter(BaseInterface):
 
-    input_spec = BIDSDerivSinkInputSpec
-    output_spec = BIDSDerivSinkOutputSpec
+    input_spec = DerivativesSorterInputSpec
+    output_spec = DerivativesSorterOutputSpec
 
     def _run_interface(self, runtime):
 
-        # Copy in_file to deriv_dir/subj_dir/sess_dir/out_file
-        shutil.copyfile(self.inputs.in_file, self._gen_out_pname())
-
-        return runtime
-
-    def _list_outputs(self):
-        outputs = self._outputs().get()
-        outputs["out_file"] = self._gen_out_pname()
-        return outputs
-
-    def _gen_out_pname(self):
-        """
-        Construct the full path of the derivatives output
-        file corresponding to the current image.
-        Create output derivatives subfolder as needed
-
-        :return: out_pname, str, pathlike
-            Derivatives output file path
-        """
+        #
+        # Parse the source BOLD image filename for useful keys
+        #
 
         # Source BOLD image basename
         source_fname = self.inputs.source_file
         source_bname = op.basename(source_fname)
-
-        # Strip maximum of two extensions
-        source_bname, _ = op.splitext(source_bname)
-        source_bname, _ = op.splitext(source_bname)
 
         # Get entities from source_file
         keys = bids.layout.parse_file_entities(source_fname)
@@ -88,16 +84,41 @@ class BIDSDerivSink(BaseInterface):
         old_suffix = keys['suffix']
         old_ext = keys['extension']
 
-        # subject/session/datatype output subfolder
+        # Strip maximum of two extensions
+        source_bname, _ = op.splitext(source_bname)
+        source_bname, _ = op.splitext(source_bname)
+
+        # Output derivatives root folder
         deriv_dir = self.inputs.deriv_dir
-        data_type = self.inputs.data_type
-        out_dir = op.join(deriv_dir, 'sub-' + subj_id, 'ses-' + sess_id, data_type)
 
-        # Save create derivatives subfolder
-        os.makedirs(out_dir, exist_ok=True)
+        # Loop over all input files and sorting dicts
+        for in_pname, sort_dict in zip(self.inputs.file_list, self.inputs.sort_dict_list):
 
-        # Output file path. Replace current suffix with new suffix
-        new_suffix = self.inputs.new_suffix
-        out_pname = op.join(out_dir, source_bname.replace(old_suffix, new_suffix)) + old_ext
+            # subject/session/datatype output subfolder
 
-        return out_pname
+            data_type = sort_dict['DataType']
+            out_dir = op.join(deriv_dir, 'sub-' + subj_id, 'ses-' + sess_id, data_type)
+
+            # Save create derivatives subfolder
+            os.makedirs(out_dir, exist_ok=True)
+
+            # Output file path. Replace current suffix with new suffix
+            new_suffix = sort_dict['NewSuffix']
+            out_pstub = op.join(out_dir, source_bname.replace(old_suffix, new_suffix))
+
+            if 'Text' in sort_dict['FileType']:
+                out_pname = out_pstub + '.txt'
+            else:
+                out_pname = out_pstub + old_ext
+
+            # Copy input file to deriv_dir/subj_dir/sess_dir/out_file
+            shutil.copyfile(in_pname, out_pname)
+
+        return runtime
+
+    def _list_outputs(self):
+
+        # Dummy output file
+        outputs = self._outputs().get()
+        outputs["out_file"] = []
+        return outputs

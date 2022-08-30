@@ -110,7 +110,7 @@ def main():
     # Individual custom templates and labels must have been set up in
     # the TemplateFlow cache directory (typically $(HOME)/.cache/templateflow
     tpl_t1_brain_path = tflow.get(
-        subj_id, desc='brain', resolution=1,
+        subj_id, desc='brain', resolution=2,
         suffix='T1w', extension='nii.gz'
     )
     if not tpl_t1_brain_path:
@@ -118,7 +118,7 @@ def main():
         sys.exit(1)
 
     tpl_t2_head_path = tflow.get(
-        subj_id, desc=None, resolution=1,
+        subj_id, desc=None, resolution=2,
         suffix='T2w', extension='nii.gz'
     )
     if not tpl_t2_head_path:
@@ -126,7 +126,7 @@ def main():
         sys.exit(1)
 
     tpl_t2_brain_path = tflow.get(
-        subj_id, desc='brain', resolution=1,
+        subj_id, desc='brain', resolution=2,
         suffix='T2w', extension='nii.gz'
     )
     if not tpl_t2_brain_path:
@@ -137,12 +137,12 @@ def main():
     if args.debug:
         print('DEBUG: Using brain mask as single label')
         tpl_labels_path = tflow.get(
-            subj_id, desc='brain', resolution=1,
+            subj_id, desc='brain', resolution=2,
             suffix='mask', extension='nii.gz'
         )
     else:
         tpl_labels_path = tflow.get(
-            subj_id, desc=None, resolution=1,
+            subj_id, desc=None, resolution=2,
             suffix='dlabel', extension='nii.gz'
         )
 
@@ -224,10 +224,16 @@ def main():
         toplevel_wf.inputs.inputs.bold_meta = bold_meta
         toplevel_wf.inputs.inputs.sbref = sbref_path
         toplevel_wf.inputs.inputs.sbref_meta = sbref_meta
-        toplevel_wf.inputs.inputs.fmaps = fmap_paths
-        toplevel_wf.inputs.inputs.fmaps_meta = fmap_metas
+        toplevel_wf.inputs.inputs.seepis = fmap_paths
+        toplevel_wf.inputs.inputs.seepis_meta = fmap_metas
         toplevel_wf.inputs.inputs.tpl_t2_head = tpl_t2_head_path
         toplevel_wf.inputs.inputs.tpl_labels = tpl_labels_path
+
+        # Plot workflow graph as a colored PNG image
+        toplevel_wf.write_graph(
+            graph2use='colored',
+            dotfilename='/Users/jmt/sandbox/slabpreproc.dot'
+        )
 
         # Run workflow
         # Workflow outputs are stored in a BIDS derivatives folder
