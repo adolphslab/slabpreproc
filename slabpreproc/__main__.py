@@ -36,9 +36,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from .workflows import build_wf_toplevel
+from .workflows import build_toplevel_wf
 
 import os
+import sys
 import re
 import os.path as op
 from pathlib import Path
@@ -58,6 +59,7 @@ def main():
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
     parser.add_argument('--wb', required=True, help='Whole brain SBRef task ID')
+    parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
 
     # Parse command line arguments
     args = parser.parse_args()
@@ -76,20 +78,21 @@ def main():
         work_dir = Path(op.join(bids_dir, 'work'))
     os.makedirs(work_dir, exist_ok=True)
 
-    # Set debug mode and logging to work/ folder
-    config.enable_debug_mode()
-    config.set('execution', 'stop_on_first_crash', 'true')
-    config.set('execution', 'remove_unnecessary_outputs', 'false')
-    config.set('logging', 'workflow_level', 'DEBUG')
-    config.set('logging', 'interface_level', 'DEBUG')
-    config.set('logging', 'node_level', 'DEBUG')
-    config.update_config({
-        'logging': {
-            'log_directory': work_dir,
-            'log_to_file': True
-        }
-    })
-    logging.update_logging(config)
+    # Set nipype debug mode and logging to work/ folder
+    if args.debug:
+        config.enable_debug_mode()
+        config.set('execution', 'stop_on_first_crash', 'true')
+        config.set('execution', 'remove_unnecessary_outputs', 'false')
+        config.set('logging', 'workflow_level', 'DEBUG')
+        config.set('logging', 'interface_level', 'DEBUG')
+        config.set('logging', 'node_level', 'DEBUG')
+        config.update_config({
+            'logging': {
+                'log_directory': work_dir,
+                'log_to_file': True
+            }
+        })
+        logging.update_logging(config)
 
     # Subject and session IDs
     subj_id = args.sub
@@ -101,24 +104,51 @@ def main():
     print(f'Work directory : {work_dir}')
     print(f'Subject ID     : {subj_id}')
     print(f'Session ID     : {sess_id}')
+    print(f'Debug mode     : {args.debug}')
 
     # Get T1 and T2 templates and subcortical labels from templateflow repo
     # Individual custom templates and labels must have been set up in
     # the TemplateFlow cache directory (typically $(HOME)/.cache/templateflow
     tpl_t1_brain_path = tflow.get(
-        subj_id, desc='brain', resolution=1,
+        subj_id, desc='brain', resolution=2,
         suffix='T1w', extension='nii.gz'
     )
+    if not tpl_t1_brain_path:
+        print(f'* Could not find T1w brain template  - exiting')
+        sys.exit(1)
 
-    tpl_t2_brain_path = tflow.get(
-        subj_id, desc='brain', resolution=1,
+    tpl_t2_head_path = tflow.get(
+        subj_id, desc=None, resolution=2,
         suffix='T2w', extension='nii.gz'
     )
+    if not tpl_t2_head_path:
+        print(f'* Could not find T2w head template - exiting')
+        sys.exit(1)
 
-    tpl_labels_path = tflow.get(
-        subj_id, desc='', resolution=1,
-        suffix='dlabel', extension='nii.gz'
+    tpl_t2_brain_path = tflow.get(
+        subj_id, desc='brain', resolution=2,
+        suffix='T2w', extension='nii.gz'
     )
+    if not tpl_t2_brain_path:
+        print(f'* Could not find T2w brain template - exiting')
+        sys.exit(1)
+
+    # Just use the brain mask as a test label for now
+    if args.debug:
+        print('DEBUG: Using brain mask as single label')
+        tpl_labels_path = tflow.get(
+            subj_id, desc='brain', resolution=2,
+            suffix='mask', extension='nii.gz'
+        )
+    else:
+        tpl_labels_path = tflow.get(
+            subj_id, desc=None, resolution=2,
+            suffix='dlabel', extension='nii.gz'
+        )
+
+    if not tpl_labels_path:
+        print(f'* Could not find template labels - exiting')
+        sys.exit(1)
 
     # Construct BIDS layout object for this dataset
     layout = gen_bids_layout(bids_dir)
@@ -152,7 +182,7 @@ def main():
         os.makedirs(this_work_dir, exist_ok=True)
 
         #
-        # Bound SBRef for this BOLD series
+        # Find SBRef for this BOLD series
         #
 
         filter = {
@@ -171,7 +201,7 @@ def main():
         sbref_meta = sbref[0].get_metadata()
 
         #
-        # Bound fieldmaps for this BOLD series
+        # Find fieldmaps for this BOLD series
         #
 
         filter = {
@@ -187,22 +217,27 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        wf_toplevel = build_wf_toplevel(this_work_dir, deriv_dir, layout)
+        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, layout)
 
         # Supply input images
-        wf_toplevel.inputs.inputs.bold = bold_path
-        wf_toplevel.inputs.inputs.bold_meta = bold_meta
-        wf_toplevel.inputs.inputs.sbref = sbref_path
-        wf_toplevel.inputs.inputs.sbref_meta = sbref_meta
-        wf_toplevel.inputs.inputs.fmaps = fmap_paths
-        wf_toplevel.inputs.inputs.fmaps_meta = fmap_metas
-        wf_toplevel.inputs.inputs.ind_t1_brain = tpl_t1_brain_path
-        wf_toplevel.inputs.inputs.ind_t2_brain = tpl_t2_brain_path
-        wf_toplevel.inputs.inputs.ind_labels = tpl_labels_path
+        toplevel_wf.inputs.inputs.bold = bold_path
+        toplevel_wf.inputs.inputs.bold_meta = bold_meta
+        toplevel_wf.inputs.inputs.sbref = sbref_path
+        toplevel_wf.inputs.inputs.sbref_meta = sbref_meta
+        toplevel_wf.inputs.inputs.seepis = fmap_paths
+        toplevel_wf.inputs.inputs.seepis_meta = fmap_metas
+        toplevel_wf.inputs.inputs.tpl_t2_head = tpl_t2_head_path
+        toplevel_wf.inputs.inputs.tpl_labels = tpl_labels_path
+
+        # Plot workflow graph as a colored PNG image
+        toplevel_wf.write_graph(
+            graph2use='colored',
+            dotfilename='/Users/jmt/sandbox/slabpreproc.dot'
+        )
 
         # Run workflow
         # Workflow outputs are stored in a BIDS derivatives folder
-        wf_toplevel.run()
+        toplevel_wf.run()
 
 
 def gen_bids_layout(bids_dir):
@@ -237,7 +272,7 @@ def gen_bids_layout(bids_dir):
         str(bids_dir),
         indexer=bids_indexer
     )
-    print('Indexing completed')
+    print('Indexing Complete')
 
     return layout
 

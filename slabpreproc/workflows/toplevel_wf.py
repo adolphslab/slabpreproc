@@ -30,10 +30,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from .qc import build_wf_qc
-from .func_preproc import build_wf_func_preproc
-from .template import build_wf_template
-from .derivatives import build_wf_derivatives
+from .qc_wf import build_qc_wf
+from .func_preproc_wf import build_func_preproc_wf
+from .template_reg_wf import build_template_reg_wf
+from .derivatives_wf import build_derivatives_wf
 
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
@@ -42,7 +42,7 @@ import nipype.pipeline.engine as pe
 # config.enable_debug_mode()
 
 
-def build_wf_toplevel(work_dir, deriv_dir, layout):
+def build_toplevel_wf(work_dir, deriv_dir, layout):
     """
     Build main subcortical QC workflow
 
@@ -55,89 +55,88 @@ def build_wf_toplevel(work_dir, deriv_dir, layout):
     :return:
     """
 
-    # Subcortical QC workflow input node
+    # Input node setup
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
                 'bold', 'bold_meta',
                 'sbref', 'sbref_meta',
-                'fmaps', 'fmaps_meta',
-                'ind_t1_brain', 'ind_t2_brain', 'ind_labels'
+                'seepis', 'seepis_meta',
+                'tpl_t2_head',
+                'tpl_labels'
             ]
         ),
         name='inputs'
     )
 
-    # Build sub-workflows
-    wf_func_preproc = build_wf_func_preproc()
-    wf_template = build_wf_template()
-    wf_qc = build_wf_qc()
-    wf_derivatives = build_wf_derivatives(deriv_dir)
+    # Sub-workflows setup
+    func_preproc_wf = build_func_preproc_wf()
+    template_reg_wf = build_template_reg_wf()
+    qc_wf = build_qc_wf()
+    derivatives_wf = build_derivatives_wf(deriv_dir)
 
-    # Top level slab preproc workflow
-    wf_toplevel = pe.Workflow(
+    # Workflow
+    toplevel_wf = pe.Workflow(
         base_dir=str(work_dir),
-        name='wf_toplevel'
+        name='toplevel_wf'
     )
 
-    wf_toplevel.connect([
+    toplevel_wf.connect([
 
         # Func preproc inputs
-        (inputs, wf_func_preproc, [
+        (inputs, func_preproc_wf, [
             ('bold', 'inputs.bold'),
             ('sbref', 'inputs.sbref'),
-            ('fmaps', 'inputs.fmaps'),
+            ('seepis', 'inputs.seepis'),
             ('bold_meta', 'inputs.bold_meta'),
             ('sbref_meta', 'inputs.sbref_meta'),
-            ('fmaps_meta', 'inputs.fmaps_meta')
+            ('seepis_meta', 'inputs.seepis_meta')
         ]),
 
         # Pass T2w individual template to registration workflow
-        (inputs, wf_template, [
-            ('ind_t2_brain', 'inputs.ind_t2_brain'),
+        (inputs, template_reg_wf, [
+            ('tpl_t2_head', 'inputs.tpl_t2_head'),
         ]),
 
         # Pass preprocessed (motion and distortion corrected) BOLD and SBRef
         # to template registration workflow
-        (wf_func_preproc, wf_template, [
+        (func_preproc_wf, template_reg_wf, [
             ('outputs.sbref_preproc', 'inputs.sbref_preproc'),
-            ('outputs.bold_preproc', 'inputs.bold_preproc')
+            ('outputs.bold_preproc', 'inputs.bold_preproc'),
+            ('outputs.seepi_unwarp_mean', 'inputs.seepi_unwarp_mean')
         ]),
 
         # Pass fMRI preproc results to QC workflow
-        (wf_func_preproc, wf_qc, [
-            ('outputs.bold', 'inputs.bold')
-        ]),
+        (template_reg_wf, qc_wf, [('outputs.tpl_bold_preproc', 'inputs.bold')]),
 
         # Pass template labels to QC workflow
-        (wf_template, wf_qc, [
-            ('tpl_labels', 'inputs.tpl_labels')
-        ]),
+        (inputs, qc_wf, [('tpl_labels', 'inputs.labels')]),
 
         # Pass original BOLD filename as source file for derivatives output filenaming
-        (inputs, wf_derivatives, [
+        (inputs, derivatives_wf, [
             ('bold', 'inputs.source_file')
         ]),
 
         # Write preproc correction results to derivatives folder
-        (wf_func_preproc, wf_derivatives, [
+        (func_preproc_wf, derivatives_wf, [
             ('outputs.moco_pars', 'inputs.moco_pars')
         ]),
 
         # Write individual template space results to derivatives folder
-        (wf_template, wf_derivatives, [
-            ('outputs.tpl_bold', 'inputs.tpl_bold'),
-            ('outputs.tpl_sbref', 'inputs.tpl_sbref'),
+        (template_reg_wf, derivatives_wf, [
+            ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
+            ('outputs.tpl_sbref_preproc', 'inputs.tpl_sbref_preproc'),
+            ('outputs.tpl_seepi_unwarp_mean', 'inputs.tpl_seepi_unwarp_mean'),
         ]),
 
         # Write QC results to derivatives folder
-        (wf_qc, wf_derivatives, [
-            ('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean'),
-            ('outputs.tpl_bold_tsd', 'inputs.tpl_bold_tsd'),
-            ('outputs.tpl_bold_detrended', 'inputs.tpl_bold_detrended'),
-            ('outputs.tpl_bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
-            ('outputs.tpl_bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats')
+        (qc_wf, derivatives_wf, [
+            ('outputs.bold_tmean', 'inputs.tpl_bold_tmean'),
+            ('outputs.bold_tsd', 'inputs.tpl_bold_tsd'),
+            ('outputs.bold_detrended', 'inputs.tpl_bold_detrended'),
+            ('outputs.bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
+            ('outputs.bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats')
         ]),
     ])
 
-    return wf_toplevel
+    return toplevel_wf
