@@ -3,7 +3,9 @@
 * Optimized for partial-brain slab coverage
 * generates basic quality control metrics
 * uses TOPUP for SDC
-* supports complex-valued BOLD data
+
+## Feature Requests
+* support for complex-valued BOLD data
 
 Implemented in nipype  
 Depends on ANTs, AFNI and FSL
