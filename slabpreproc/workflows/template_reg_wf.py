@@ -7,6 +7,8 @@ Register unwarped BOLD EPI space to individual T2w template via the unwarped T2w
 
 import nipype.interfaces.utility as util
 import nipype.interfaces.fsl as fsl
+import nipype.interfaces.ants as ants
+import nipype.interfaces.c3 as c3
 import nipype.pipeline.engine as pe
 
 
@@ -27,7 +29,10 @@ def build_template_reg_wf():
 
     # Estimate rigid body transform from unwarped SE-EPI midspace to individual T2w
     # template space
-    reg_seepi_tpl = pe.Node(
+
+    # FLIRT rigid body registration preferred over antsAI
+
+    flirt_seepi_tpl = pe.Node(
         fsl.FLIRT(
             dof=6,
             cost='corratio',
@@ -35,31 +40,46 @@ def build_template_reg_wf():
             searchr_x=[-45, 45],
             searchr_y=[-15, 15],
             searchr_z=[-15, 15],
-            output_type='NIFTI_GZ'
+            output_type='NIFTI_GZ',
+            terminal_output='none'
         ),
-        name='reg_seepi_tpl',
-        terminal_output=None,
+        name='flirt_seepi_tpl',
     )
 
-    # Resample 4D BOLD to individual template space
+    # Convert FLIRT affine matrix to ITK transform for ANTs resampling
+    # Prefer ITK Lanczos sinc over FSL spline or sinc
+    fsl2itk = pe.Node(
+        c3.C3dAffineTool(
+            fsl2ras=True,
+            itk_transform=True
+        ),
+        name='fsl2itk'
+    )
+
+    resamp_seepi_tpl = pe.Node(
+        ants.ApplyTransforms(
+            interpolation='LanczosWindowedSinc',
+            input_image_type = 0
+        ),
+        name='resamp_seepi_tpl'
+    )
+
+    resamp_sbref_tpl = pe.Node(
+        ants.ApplyTransforms(
+            interpolation='LanczosWindowedSinc',
+            input_image_type = 0
+        ),
+        name='resamp_sbref_tpl'
+    )
+
     resamp_bold_tpl = pe.Node(
-        fsl.FLIRT(
-            apply_xfm=True,
-            interp='spline',
-            output_type='NIFTI_GZ'
+        ants.ApplyTransforms(
+            interpolation='LanczosWindowedSinc',
+            input_image_type=3
         ),
         name='resamp_bold_tpl'
     )
 
-    # Resample 3D SBRef to individual template space
-    resamp_sbref_tpl = pe.Node(
-        fsl.FLIRT(
-            apply_xfm=True,
-            interp='trilinear',
-            output_type='NIFTI_GZ'
-        ),
-        name='resamp_sbref_tpl'
-    )
 
     # Define workflow outputs
     outputs = pe.Node(
@@ -78,26 +98,38 @@ def build_template_reg_wf():
 
     template_reg_wf.connect([
 
-        # Register SE-EPI unwarped midspace to individual template space
-        (inputs, reg_seepi_tpl, [
+        # FLIRT register unwarped SE-EPI midspace to individual template space
+        (inputs, flirt_seepi_tpl, [
             ('seepi_unwarp_mean', 'in_file'),
             ('tpl_t2_head', 'reference'),
         ]),
 
-        # Resample unwarped BOLD to template space
-        (inputs, resamp_bold_tpl, [('bold_preproc', 'in_file')]),
-        (inputs, resamp_bold_tpl, [('tpl_t2_head', 'reference')]),
-        (reg_seepi_tpl, resamp_bold_tpl, [('out_matrix_file', 'in_matrix_file')]),
+        # Convert FLIRT transform to ITK
+        (flirt_seepi_tpl, fsl2itk, [('out_matrix_file', 'transform_file')]),
+        (inputs, fsl2itk, [
+            ('seepi_unwarp_mean', 'source_file'),
+            ('tpl_t2_head', 'reference_file'),
+        ]),
+
+        # Resample unwarped SE-EPI midspace to template space
+        (inputs, resamp_seepi_tpl, [('seepi_unwarp_mean', 'input_image')]),
+        (inputs, resamp_seepi_tpl, [('tpl_t2_head', 'reference_image')]),
+        (fsl2itk, resamp_seepi_tpl, [('itk_transform', 'transforms')]),
 
         # Resample unwarped SBref to template space
-        (inputs, resamp_sbref_tpl, [('sbref_preproc', 'in_file')]),
-        (inputs, resamp_sbref_tpl, [('tpl_t2_head', 'reference')]),
-        (reg_seepi_tpl, resamp_sbref_tpl, [('out_matrix_file', 'in_matrix_file')]),
+        (inputs, resamp_sbref_tpl, [('sbref_preproc', 'input_image')]),
+        (inputs, resamp_sbref_tpl, [('tpl_t2_head', 'reference_image')]),
+        (fsl2itk, resamp_sbref_tpl, [('itk_transform', 'transforms')]),
+
+        # Resample unwarped BOLD to template space
+        (inputs, resamp_bold_tpl, [('bold_preproc', 'input_image')]),
+        (inputs, resamp_bold_tpl, [('tpl_t2_head', 'reference_image')]),
+        (fsl2itk, resamp_bold_tpl, [('itk_transform', 'transforms')]),
 
         # Output results
-        (reg_seepi_tpl, outputs, [('out_file', 'tpl_seepi_unwarp_mean')]),
-        (resamp_bold_tpl, outputs, [('out_file', 'tpl_bold_preproc')]),
-        (resamp_sbref_tpl, outputs, [('out_file', 'tpl_sbref_preproc')]),
+        (resamp_seepi_tpl, outputs, [('output_image', 'tpl_seepi_unwarp_mean')]),
+        (resamp_bold_tpl, outputs, [('output_image', 'tpl_bold_preproc')]),
+        (resamp_sbref_tpl, outputs, [('output_image', 'tpl_sbref_preproc')]),
 
 
     ])

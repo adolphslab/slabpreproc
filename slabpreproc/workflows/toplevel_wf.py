@@ -62,8 +62,8 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
                 'bold', 'bold_meta',
                 'sbref', 'sbref_meta',
                 'seepis', 'seepis_meta',
-                'tpl_t2_head',
-                'tpl_labels'
+                'tpl_t1_head', 'tpl_t2_head',
+                'tpl_pseg', 'tpl_dseg', 'tpl_bmask'
             ]
         ),
         name='inputs'
@@ -94,9 +94,7 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
         ]),
 
         # Pass T2w individual template to registration workflow
-        (inputs, template_reg_wf, [
-            ('tpl_t2_head', 'inputs.tpl_t2_head'),
-        ]),
+        (inputs, template_reg_wf, [('tpl_t2_head', 'inputs.tpl_t2_head')]),
 
         # Pass preprocessed (motion and distortion corrected) BOLD and SBRef
         # to template registration workflow
@@ -106,23 +104,15 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
             ('outputs.seepi_unwarp_mean', 'inputs.seepi_unwarp_mean')
         ]),
 
-        # Pass fMRI preproc results to QC workflow
+        # Connect QC workflow
         (template_reg_wf, qc_wf, [('outputs.tpl_bold_preproc', 'inputs.bold')]),
+        (inputs, qc_wf, [('tpl_dseg', 'inputs.labels')]),
 
-        # Pass template labels to QC workflow
-        (inputs, qc_wf, [('tpl_labels', 'inputs.labels')]),
+        # Connect derivatives outputs
+        (inputs, derivatives_wf, [('bold', 'inputs.source_file')]),
+        (func_preproc_wf, derivatives_wf, [('outputs.moco_pars', 'inputs.moco_pars')]),
 
-        # Pass original BOLD filename as source file for derivatives output filenaming
-        (inputs, derivatives_wf, [
-            ('bold', 'inputs.source_file')
-        ]),
-
-        # Write preproc correction results to derivatives folder
-        (func_preproc_wf, derivatives_wf, [
-            ('outputs.moco_pars', 'inputs.moco_pars')
-        ]),
-
-        # Write individual template space results to derivatives folder
+        # Write individual template-space results to derivatives folder
         (template_reg_wf, derivatives_wf, [
             ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
             ('outputs.tpl_sbref_preproc', 'inputs.tpl_sbref_preproc'),
@@ -137,6 +127,15 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
             ('outputs.bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
             ('outputs.bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats')
         ]),
+
+        # Write atlas images and templates to derivatives folder
+        (inputs, derivatives_wf, [
+            ('tpl_t1_head', 'inputs.tpl_t1_head'),
+            ('tpl_t2_head', 'inputs.tpl_t2_head'),
+            ('tpl_pseg', 'inputs.tpl_pseg'),
+            ('tpl_dseg', 'inputs.tpl_dseg'),
+            ('tpl_bmask', 'inputs.tpl_bmask')
+        ])
     ])
 
     return toplevel_wf

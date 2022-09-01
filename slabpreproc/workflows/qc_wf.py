@@ -9,6 +9,7 @@ PLACE  : Caltech
 """
 
 import nipype.interfaces.afni as afni
+import nipype.interfaces.c3 as c3
 import nipype.interfaces.utility as util
 import nipype.algorithms.confounds as confounds
 import nipype.pipeline.engine as pe
@@ -32,12 +33,16 @@ def build_qc_wf():
         name='bold_tsfnr'
     )
 
-    # ROI tSFNR stats (median, sd, min, max)
+    # ROI tSFNR stats (mean, sd, voxels)
+
     # Inputs: in_file, mask
     # Outputs : out_file
     bold_tsfnr_roistats = pe.Node(
         afni.ROIStats(
-            args='-median -sigma -minmax'
+            stat=['mean', 'sigma', 'voxels'],
+            nomeanout=True,
+            format1DR=True,
+            nobriklab=True
         ),
         name='bold_tsfnr_roistats'
     )

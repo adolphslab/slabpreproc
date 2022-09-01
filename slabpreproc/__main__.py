@@ -58,7 +58,6 @@ def main():
     parser.add_argument('-w', '--workdir', help='Work directory')
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
-    parser.add_argument('--wb', required=True, help='Whole brain SBRef task ID')
     parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
 
     # Parse command line arguments
@@ -109,12 +108,12 @@ def main():
     # Get T1 and T2 templates and subcortical labels from templateflow repo
     # Individual custom templates and labels must have been set up in
     # the TemplateFlow cache directory (typically $(HOME)/.cache/templateflow
-    tpl_t1_brain_path = tflow.get(
-        subj_id, desc='brain', resolution=2,
+    tpl_t1_head_path = tflow.get(
+        subj_id, desc=None, resolution=2,
         suffix='T1w', extension='nii.gz'
     )
-    if not tpl_t1_brain_path:
-        print(f'* Could not find T1w brain template  - exiting')
+    if not tpl_t1_head_path:
+        print(f'* Could not find T1w head template  - exiting')
         sys.exit(1)
 
     tpl_t2_head_path = tflow.get(
@@ -125,29 +124,28 @@ def main():
         print(f'* Could not find T2w head template - exiting')
         sys.exit(1)
 
-    tpl_t2_brain_path = tflow.get(
-        subj_id, desc='brain', resolution=2,
-        suffix='T2w', extension='nii.gz'
+    tpl_pseg_path = tflow.get(
+        subj_id, desc='subcort', resolution=2,
+        suffix='pseg', extension='nii.gz'
     )
-    if not tpl_t2_brain_path:
-        print(f'* Could not find T2w brain template - exiting')
+    if not tpl_pseg_path:
+        print(f'* Could not find template pseg labels - exiting')
         sys.exit(1)
 
-    # Just use the brain mask as a test label for now
-    if args.debug:
-        print('DEBUG: Using brain mask as single label')
-        tpl_labels_path = tflow.get(
-            subj_id, desc='brain', resolution=2,
-            suffix='mask', extension='nii.gz'
-        )
-    else:
-        tpl_labels_path = tflow.get(
-            subj_id, desc=None, resolution=2,
-            suffix='dlabel', extension='nii.gz'
-        )
+    tpl_dseg_path = tflow.get(
+        subj_id, desc='subcort', resolution=2,
+        suffix='dseg', extension='nii.gz'
+    )
+    if not tpl_dseg_path:
+        print(f'* Could not find template dseg labels - exiting')
+        sys.exit(1)
 
-    if not tpl_labels_path:
-        print(f'* Could not find template labels - exiting')
+    tpl_bmask_path = tflow.get(
+        subj_id, desc='brain', resolution=2,
+        suffix='mask', extension='nii.gz'
+    )
+    if not tpl_bmask_path:
+        print(f'* Could not find template brain mask - exiting')
         sys.exit(1)
 
     # Construct BIDS layout object for this dataset
@@ -226,8 +224,11 @@ def main():
         toplevel_wf.inputs.inputs.sbref_meta = sbref_meta
         toplevel_wf.inputs.inputs.seepis = fmap_paths
         toplevel_wf.inputs.inputs.seepis_meta = fmap_metas
+        toplevel_wf.inputs.inputs.tpl_t1_head = tpl_t1_head_path
         toplevel_wf.inputs.inputs.tpl_t2_head = tpl_t2_head_path
-        toplevel_wf.inputs.inputs.tpl_labels = tpl_labels_path
+        toplevel_wf.inputs.inputs.tpl_pseg = tpl_pseg_path
+        toplevel_wf.inputs.inputs.tpl_dseg = tpl_dseg_path
+        toplevel_wf.inputs.inputs.tpl_bmask = tpl_bmask_path
 
         # Plot workflow graph as a colored PNG image
         toplevel_wf.write_graph(

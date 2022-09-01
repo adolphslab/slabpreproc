@@ -34,6 +34,11 @@ def build_derivatives_wf(deriv_dir):
                 'tpl_bold_tsfnr',
                 'tpl_bold_tsfnr_roistats',
                 'moco_pars',
+                'tpl_t1_head',
+                'tpl_t2_head',
+                'tpl_pseg',
+                'tpl_dseg',
+                'tpl_bmask'
             ]),
         name='inputs'
     )
@@ -49,11 +54,16 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'qc', 'NewSuffix': 'recon-tsfnr_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsfnr_bold_roistats', 'FileType': 'Text'},
         {'DataType': 'qc', 'NewSuffix': 'recon-moco_bold_pars', 'FileType': 'Text'},
+        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_T1w', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_T2w', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_pseg', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_dseg', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_desc-brain_mask', 'FileType': 'Image'},
     ]
 
     # Create a list of all inputs
     deriv_list = pe.Node(
-        util.Merge(numinputs=9),
+        util.Merge(numinputs=14),
         name='deriv_list'
     )
 
@@ -84,7 +94,12 @@ def build_derivatives_wf(deriv_dir):
             ('tpl_bold_detrended', 'in6'),
             ('tpl_bold_tsfnr', 'in7'),
             ('tpl_bold_tsfnr_roistats', 'in8'),
-            ('moco_pars', 'in9')
+            ('moco_pars', 'in9'),
+            ('tpl_t1_head', 'in10'),
+            ('tpl_t2_head', 'in11'),
+            ('tpl_pseg', 'in12'),
+            ('tpl_dseg', 'in13'),
+            ('tpl_bmask', 'in14')
         ]),
 
         # Pass file list to sorter
