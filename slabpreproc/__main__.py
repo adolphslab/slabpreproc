@@ -230,12 +230,6 @@ def main():
         toplevel_wf.inputs.inputs.tpl_dseg = tpl_dseg_path
         toplevel_wf.inputs.inputs.tpl_bmask = tpl_bmask_path
 
-        # Plot workflow graph as a colored PNG image
-        toplevel_wf.write_graph(
-            graph2use='colored',
-            dotfilename='/Users/jmt/sandbox/slabpreproc.dot'
-        )
-
         # Run workflow
         # Workflow outputs are stored in a BIDS derivatives folder
         toplevel_wf.run()

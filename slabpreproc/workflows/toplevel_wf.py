@@ -138,4 +138,21 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
         ])
     ])
 
+    # Optional: plot main workflows to sandbox
+
+    func_preproc_wf.write_graph(
+        graph2use='colored',
+        dotfilename='/Users/jmt/sandbox/func_preproc_wf.dot'
+    )
+
+    template_reg_wf.write_graph(
+        graph2use='colored',
+        dotfilename='/Users/jmt/sandbox/template_reg_wf.dot'
+    )
+
+    qc_wf.write_graph(
+        graph2use='colored',
+        dotfilename='/Users/jmt/sandbox/qc_wf.dot'
+    )
+
     return toplevel_wf
