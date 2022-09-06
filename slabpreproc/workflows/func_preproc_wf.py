@@ -50,6 +50,7 @@ def build_func_preproc_wf():
         fsl.MCFLIRT(
             cost='normcorr',
             dof=6,
+            save_mats=True,  # Save rigid transform matrices for single-shot, per-volume resampling
             save_plots=True
         ),
         name='mcflirt'

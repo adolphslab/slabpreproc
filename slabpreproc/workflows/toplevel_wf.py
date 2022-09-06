@@ -29,6 +29,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import os
 
 from .qc_wf import build_qc_wf
 from .func_preproc_wf import build_func_preproc_wf
@@ -140,19 +141,22 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
 
     # Optional: plot main workflows to sandbox
 
+    graph_dir = "slabpreproc_graphs"
+    os.makedirs(graph_dir, exist_ok=True)
+
     func_preproc_wf.write_graph(
         graph2use='colored',
-        dotfilename='/Users/jmt/sandbox/func_preproc_wf.dot'
+        dotfilename=os.path.join(graph_dir, 'func_preproc_wf.dot')
     )
 
     template_reg_wf.write_graph(
         graph2use='colored',
-        dotfilename='/Users/jmt/sandbox/template_reg_wf.dot'
+        dotfilename=os.path.join(graph_dir, 'template_reg_wf.dot')
     )
 
     qc_wf.write_graph(
         graph2use='colored',
-        dotfilename='/Users/jmt/sandbox/qc_wf.dot'
+        dotfilename=os.path.join(graph_dir, 'qc_wf.dot')
     )
 
     return toplevel_wf
