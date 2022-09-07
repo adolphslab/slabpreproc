@@ -8,7 +8,6 @@ DATES  : 2022-07-23 JMT From scratch
 """
 
 import os
-import os.path as op
 import numpy as np
 from pathlib import Path
 

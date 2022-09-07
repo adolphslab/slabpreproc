@@ -139,7 +139,7 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
         ])
     ])
 
-    # Optional: plot main workflows to sandbox
+    # Optional: plot main workflows
 
     graph_dir = "slabpreproc_graphs"
     os.makedirs(graph_dir, exist_ok=True)

@@ -148,7 +148,8 @@ setup(
         'nipype',
         'pybids',
         'niworkflows',
-        'templateflow'
+        'templateflow',
+        'reportlab'
     ],  # Optional
 
     # List additional groups of dependencies here (e.g. development
