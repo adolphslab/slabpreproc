@@ -14,6 +14,9 @@ import nipype.pipeline.engine as pe
 
 def build_template_reg_wf():
 
+    # Hardcode for now
+    n_threads = 8
+
     # Template inputs
     inputs = pe.Node(
         util.IdentityInterface(
@@ -59,7 +62,8 @@ def build_template_reg_wf():
     resamp_seepi_tpl = pe.Node(
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
-            input_image_type = 0
+            input_image_type = 0,
+            num_threads=n_threads
         ),
         name='resamp_seepi_tpl'
     )
@@ -67,7 +71,8 @@ def build_template_reg_wf():
     resamp_sbref_tpl = pe.Node(
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
-            input_image_type = 0
+            input_image_type = 0,
+            num_threads=n_threads
         ),
         name='resamp_sbref_tpl'
     )
@@ -75,7 +80,8 @@ def build_template_reg_wf():
     resamp_bold_tpl = pe.Node(
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
-            input_image_type=3
+            input_image_type=3,
+            num_threads=n_threads,
         ),
         name='resamp_bold_tpl'
     )
