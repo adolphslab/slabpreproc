@@ -215,7 +215,7 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, layout)
+        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir)
 
         # Supply input images
         toplevel_wf.inputs.inputs.bold = bold_path

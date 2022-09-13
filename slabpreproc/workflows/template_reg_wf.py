@@ -12,10 +12,7 @@ import nipype.interfaces.c3 as c3
 import nipype.pipeline.engine as pe
 
 
-def build_template_reg_wf():
-
-    # Hardcode for now
-    n_threads = 8
+def build_template_reg_wf(n_threads=2):
 
     # Template inputs
     inputs = pe.Node(
@@ -24,7 +21,8 @@ def build_template_reg_wf():
                 'bold_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
-                'tpl_t2_head'
+                'tpl_t2_head',
+                'topup_b0_rads'
             ]
         ),
         name='inputs'
@@ -62,7 +60,7 @@ def build_template_reg_wf():
     resamp_seepi_tpl = pe.Node(
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
-            input_image_type = 0,
+            input_image_type=0,
             num_threads=n_threads
         ),
         name='resamp_seepi_tpl'
@@ -71,10 +69,19 @@ def build_template_reg_wf():
     resamp_sbref_tpl = pe.Node(
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
-            input_image_type = 0,
+            input_image_type=0,
             num_threads=n_threads
         ),
         name='resamp_sbref_tpl'
+    )
+
+    resamp_b0_tpl = pe.Node(
+        ants.ApplyTransforms(
+            interpolation='LanczosWindowedSinc',
+            input_image_type=0,
+            num_threads=n_threads
+        ),
+        name='resamp_b0_tpl'
     )
 
     resamp_bold_tpl = pe.Node(
@@ -86,7 +93,6 @@ def build_template_reg_wf():
         name='resamp_bold_tpl'
     )
 
-
     # Define workflow outputs
     outputs = pe.Node(
         util.IdentityInterface(
@@ -94,6 +100,7 @@ def build_template_reg_wf():
                 'tpl_bold_preproc',
                 'tpl_sbref_preproc',
                 'tpl_seepi_unwarp_mean',
+                'tpl_b0_rads'
             ]
         ),
         name='outputs'
@@ -127,6 +134,11 @@ def build_template_reg_wf():
         (inputs, resamp_sbref_tpl, [('tpl_t2_head', 'reference_image')]),
         (fsl2itk, resamp_sbref_tpl, [('itk_transform', 'transforms')]),
 
+        # Resample TOPUP B0 estimate to template space
+        (inputs, resamp_b0_tpl, [('topup_b0_rads', 'input_image')]),
+        (inputs, resamp_b0_tpl, [('tpl_t2_head', 'reference_image')]),
+        (fsl2itk, resamp_b0_tpl, [('itk_transform', 'transforms')]),
+
         # Resample unwarped BOLD to template space
         (inputs, resamp_bold_tpl, [('bold_preproc', 'input_image')]),
         (inputs, resamp_bold_tpl, [('tpl_t2_head', 'reference_image')]),
@@ -136,7 +148,7 @@ def build_template_reg_wf():
         (resamp_seepi_tpl, outputs, [('output_image', 'tpl_seepi_unwarp_mean')]),
         (resamp_bold_tpl, outputs, [('output_image', 'tpl_bold_preproc')]),
         (resamp_sbref_tpl, outputs, [('output_image', 'tpl_sbref_preproc')]),
-
+        (resamp_b0_tpl, outputs, [('output_image', 'tpl_b0_rads')]),
 
     ])
 

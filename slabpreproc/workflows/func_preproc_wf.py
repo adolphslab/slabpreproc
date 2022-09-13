@@ -3,6 +3,7 @@
 Functional MRI preprocessing workflow
 """
 
+import numpy as np
 import nipype.interfaces.utility as util
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.ants as ants
@@ -15,7 +16,7 @@ from ..interfaces import SEEPIRef
 # from niworkflows.interfaces.itk import MCFLIRT2ITK
 
 
-def build_func_preproc_wf():
+def build_func_preproc_wf(n_threads=2):
 
     # Preproc inputs
     inputs = pe.Node(
@@ -36,7 +37,7 @@ def build_func_preproc_wf():
     sbref2seepi = pe.Node(
         ants.RegistrationSynQuick(
             transform_type='r',
-            num_threads=4
+            num_threads=n_threads
         ),
         name='sbref2seepi',
         terminal_output=None
@@ -114,6 +115,17 @@ def build_func_preproc_wf():
         name='unwarp_sbref'
     )
 
+
+    # Derive signal dropout map from TOPUP B0 field estimate
+    # JMT Maybe replace this with template MEMPRAGE B0 map
+
+    hz2rads = pe.Node(
+        fsl.ImageMaths(
+            op_string=f'-mul {2.0 * np.pi}'
+        ),
+        name='hz2rads'
+    )
+
     # Define outputs for the fMRI preproc workflow
     outputs = pe.Node(
         util.IdentityInterface(
@@ -121,7 +133,9 @@ def build_func_preproc_wf():
                 'bold_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
-                'moco_pars'),
+                'moco_pars',
+                'topup_b0_rads'
+            ),
         ),
         name='outputs'
     )
@@ -180,10 +194,14 @@ def build_func_preproc_wf():
         (sbref_enc_file, unwarp_sbref, [('encoding_file', 'encoding_file')]),
         (inputs, unwarp_sbref, [('sbref', 'in_files')]),
 
+        # Rescale TOPUP B0 map from Hz to rad/s
+        (topup_est, hz2rads, [('out_field', 'in_file')]),
+
         # Output results
         (unwarp_bold, outputs, [('out_corrected', 'bold_preproc')]),
         (unwarp_sbref, outputs, [('out_corrected', 'sbref_preproc')]),
         (seepi_unwarp_mean, outputs, [('out_file', 'seepi_unwarp_mean')]),
+        (hz2rads, outputs, [('out_file', 'topup_b0_rads')]),
         (mcflirt, outputs, [('par_file', 'moco_pars')]),
     ])
 

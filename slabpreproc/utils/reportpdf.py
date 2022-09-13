@@ -36,12 +36,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
-
 import os
+import os.path as op
 import json
-import shutil
 import datetime as dt
 
+import bids.layout
 from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import (SimpleDocTemplate,
@@ -56,23 +56,41 @@ from reportlab.lib.units import inch
 
 class ReportPDF:
 
-    def __init__(self, images, metadata, metrics):
+    def __init__(self, report_dir, source_bold, source_bold_metadata):
         """
 
-        :param images: dict
-            Dictionary of image filenames for tpl_T1, tpl_bold_mean, etc
-        :param metadata: dict
-            Dictionary of metadata from BOLD JSON sidecar
-        :param metrics:
-            Dictionary of filenames for QC metrics
+        :param report_dir: str, Directory
+            Full path to report output folder for this subject/session
+        :param source_bold: str, Path
+            File path to source BOLD Nifti image. Use for metadata
+        :param source_bold_metadata: dict
+            Metadata from BIDS JSON sidecar dictionary
         """
 
-        self._images = images
-        self._metadata = metadata
-        self._metrics = metrics
-        self._tmp_report_pdf = os.path.join(fnames['WorkDir'], 'report.pdf')
+        self._report_dir = report_dir
 
-        # Contents - list of flowables to be built into a document
+        # Create report dir for this subject/session if needed
+        if not op.isdir(report_dir):
+            os.makedirs(report_dir, exist_ok=True)
+
+        self._source_bold = source_bold
+
+        # Get BIDS keys from BOLD filename
+        keys = bids.layout.parse_file_entities(source_bold)
+        subj_id, sess_id, task_id = keys['subject'], keys['session'], keys['task']
+
+        # Add subject, session and task IDs to metadata dict
+        source_bold_metadata['Subject'] = subj_id
+        source_bold_metadata['Session'] = sess_id
+        source_bold_metadata['Task'] = task_id
+
+        # Merge metadata from source BOLD filename and JSON sidecar
+        self._metadata = source_bold_metadata
+
+        # Build report PDF filename
+        self._report_pdf_fname = op.join(report_dir, f'sub-{subj_id}_ses-{sess_id}_task-{task_id}_report.pdf')
+
+        # Contents - list of flowables to be built into a PDF document
         self._contents = []
 
         # Add a justified paragraph style
@@ -81,27 +99,29 @@ class ReportPDF:
 
         self._init_pdf()
         self._add_summary()
-        self._add_roi_timeseries()
-        self._add_motion_timeseries()
-        self._add_sections()
-        self._add_demeaned_ts()
+        # self._add_roi_timeseries()
+        # self._add_motion_timeseries()
+        # self._add_sections()
+        # self._add_demeaned_ts()
 
         self._doc.build(self._contents)
-        self._save_report()
+        # self._save_report()
 
     def _init_pdf(self):
 
         # Create a new PDF document
-        self._doc = SimpleDocTemplate(self._tmp_report_pdf,
-                                      pagesize=letter,
-                                      rightMargin=0.5 * inch,
-                                      leftMargin=0.5 * inch,
-                                      topMargin=0.5 * inch,
-                                      bottomMargin=0.5 * inch)
+        self._doc = SimpleDocTemplate(
+            self._report_pdf_fname,
+            pagesize=letter,
+            rightMargin=0.5 * inch,
+            leftMargin=0.5 * inch,
+            topMargin=0.5 * inch,
+            bottomMargin=0.5 * inch
+        )
 
     def _add_summary(self):
 
-        ptext = '<font size=24>Slab Preprocessing Report</font>'
+        ptext = '<font size=24>Slab Preprocessing SummaryReport</font>'
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.5 * inch))
 
@@ -129,8 +149,8 @@ class ReportPDF:
 
         image = [['Repetition Time', '{} ms'.format(self._metadata['RepetitionTime'] * 1e3)],
                  ['Echo Time', '{} ms'.format(self._metadata['EchoTime'] * 1e3)],
-                 ['Voxel Size', '{} mm'.format(self._metadata['VoxelSize'])],
-                 ['Matrix Size', self._metadata['MatrixSize']],
+                 # ['Voxel Size', '{} mm'.format(self._metadata['VoxelSize'])],
+                 # ['Matrix Size', self._metadata['MatrixSize']],
                  ['EPI Echo Spacing', '{0:.0f} us'.format(self._metadata['EffectiveEchoSpacing'] * 1e6)],
                  ['RO Bandwidth', '{} Hz/pix'.format(self._metadata['PixelBandwidth'])],
                  ['PE Bandwidth', '{} Hz/pix'.format(self._metadata['BandwidthPerPixelPhaseEncode'])]]
@@ -149,53 +169,53 @@ class ReportPDF:
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.25 * inch))
 
-        signal_metrics = [['Mean Signal', '{:.1f}'.format(self._metrics['SignalMean'])],
-                          ['SNR', '{:.1f}'.format(self._metrics['SNR'])],
-                          ['tSFNR', '{:.1f}'.format(self._metrics['tSFNR'])],
-                          ['Signal-to-Nyquist Ratio', '{:.1f}'.format(self._metrics['SNyqR'])],
-                          ['Drift', '{:.3f} %/TR'.format(self._metrics['Drift'])],
-                          ['Warmup Amplitude', '{:.3f} %'.format(self._metrics['WarmupAmp'])],
-                          ['Warmup Time Constant', '{:.1f} TRs'.format(self._metrics['WarmupTime'])]
-                          ]
-
-        ptext = '<font size=11><b>Main Signal</b></font>'
-        self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
-        self._contents.append(Spacer(1, 0.1 * inch))
-
-        signal_table = Table(signal_metrics, hAlign='LEFT')
-        self._contents.append(signal_table)
-        self._contents.append(Spacer(1, 0.25 * inch))
-
-        # Add noise metrics subsection
-        noise_metrics = [['Noise Sigma', '{:.1f}'.format(self._metrics['NoiseSigma'])],
-                         ['Noise Floor', '{:.1f}'.format(self._metrics['NoiseFloor'])],
-                         ['Signal Spikes', '{}'.format(self._metrics['SignalSpikes'])],
-                         ['Nyquist Ghost Spikes', '{}'.format(self._metrics['NyquistSpikes'])],
-                         ['Air Spikes', '{}'.format(self._metrics['AirSpikes'])]]
-
-        ptext = '<font size=11><b>Noise and Spiking</b></font>'
-        self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
-        self._contents.append(Spacer(1, 0.1 * inch))
-
-        noise_table = Table(noise_metrics, hAlign='LEFT')
-        self._contents.append(noise_table)
-        self._contents.append(Spacer(1, 0.25 * inch))
-
-        # Add motion metrics subsection
-        motion_metrics = [
-            ['FD (median)', '{:0.3f} mm'.format(self._metrics['FD_p50'])],
-            ['FD (95th perc)', '{:0.3f} mm'.format(self._metrics['FD_p95'])],
-            ['LPF FD (median)', '{:0.3f} mm'.format(self._metrics['FD_LPF_p50'])],
-            ['LPF FD (95th perc)', '{:0.3f} mm'.format(self._metrics['FD_LPF_p95'])],
-        ]
-
-        ptext = '<font size=11><b>Motion</b></font>'
-        self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
-        self._contents.append(Spacer(1, 0.1 * inch))
-
-        motion_table = Table(motion_metrics, hAlign='LEFT')
-        self._contents.append(motion_table)
-        self._contents.append(Spacer(1, 0.25 * inch))
+        # signal_metrics = [['Mean Signal', '{:.1f}'.format(self._metrics['SignalMean'])],
+        #                   ['SNR', '{:.1f}'.format(self._metrics['SNR'])],
+        #                   ['tSFNR', '{:.1f}'.format(self._metrics['tSFNR'])],
+        #                   ['Signal-to-Nyquist Ratio', '{:.1f}'.format(self._metrics['SNyqR'])],
+        #                   ['Drift', '{:.3f} %/TR'.format(self._metrics['Drift'])],
+        #                   ['Warmup Amplitude', '{:.3f} %'.format(self._metrics['WarmupAmp'])],
+        #                   ['Warmup Time Constant', '{:.1f} TRs'.format(self._metrics['WarmupTime'])]
+        #                   ]
+        #
+        # ptext = '<font size=11><b>Main Signal</b></font>'
+        # self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
+        # self._contents.append(Spacer(1, 0.1 * inch))
+        #
+        # signal_table = Table(signal_metrics, hAlign='LEFT')
+        # self._contents.append(signal_table)
+        # self._contents.append(Spacer(1, 0.25 * inch))
+        #
+        # # Add noise metrics subsection
+        # noise_metrics = [['Noise Sigma', '{:.1f}'.format(self._metrics['NoiseSigma'])],
+        #                  ['Noise Floor', '{:.1f}'.format(self._metrics['NoiseFloor'])],
+        #                  ['Signal Spikes', '{}'.format(self._metrics['SignalSpikes'])],
+        #                  ['Nyquist Ghost Spikes', '{}'.format(self._metrics['NyquistSpikes'])],
+        #                  ['Air Spikes', '{}'.format(self._metrics['AirSpikes'])]]
+        #
+        # ptext = '<font size=11><b>Noise and Spiking</b></font>'
+        # self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
+        # self._contents.append(Spacer(1, 0.1 * inch))
+        #
+        # noise_table = Table(noise_metrics, hAlign='LEFT')
+        # self._contents.append(noise_table)
+        # self._contents.append(Spacer(1, 0.25 * inch))
+        #
+        # # Add motion metrics subsection
+        # motion_metrics = [
+        #     ['FD (median)', '{:0.3f} mm'.format(self._metrics['FD_p50'])],
+        #     ['FD (95th perc)', '{:0.3f} mm'.format(self._metrics['FD_p95'])],
+        #     ['LPF FD (median)', '{:0.3f} mm'.format(self._metrics['FD_LPF_p50'])],
+        #     ['LPF FD (95th perc)', '{:0.3f} mm'.format(self._metrics['FD_LPF_p95'])],
+        # ]
+        #
+        # ptext = '<font size=11><b>Motion</b></font>'
+        # self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
+        # self._contents.append(Spacer(1, 0.1 * inch))
+        #
+        # motion_table = Table(motion_metrics, hAlign='LEFT')
+        # self._contents.append(motion_table)
+        # self._contents.append(Spacer(1, 0.25 * inch))
 
     def _add_roi_timeseries(self):
 
@@ -343,8 +363,6 @@ class ReportPDF:
     def _save_report(self):
 
         # Copy report PDF to derivatives
-        shutil.copyfile(self._tmp_report_pdf, self._fnames['ReportPDF'])
-
         # Save metrics in derivatives as JSON file
         with open(self._fnames['ReportJSON'], 'w') as fd:
             json.dump(self._metrics, fd, sort_keys=True, indent=4)

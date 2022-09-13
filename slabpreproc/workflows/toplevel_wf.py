@@ -35,6 +35,7 @@ from .qc_wf import build_qc_wf
 from .func_preproc_wf import build_func_preproc_wf
 from .template_reg_wf import build_template_reg_wf
 from .derivatives_wf import build_derivatives_wf
+from ..interfaces.summaryreport import SummaryReport
 
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
@@ -43,7 +44,7 @@ import nipype.pipeline.engine as pe
 # config.enable_debug_mode()
 
 
-def build_toplevel_wf(work_dir, deriv_dir, layout):
+def build_toplevel_wf(work_dir, deriv_dir):
     """
     Build main subcortical QC workflow
 
@@ -51,8 +52,6 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
         Path to working directory
     :param deriv_dir: str
         Path to derivatives directory
-    :param layout: BIDSLayout
-        Prefilled layout for BIDS dataset
     :return:
     """
 
@@ -75,6 +74,12 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
     template_reg_wf = build_template_reg_wf()
     qc_wf = build_qc_wf()
     derivatives_wf = build_derivatives_wf(deriv_dir)
+
+    # Summary report node
+    summary_report = pe.Node(
+        SummaryReport(deriv_dir=deriv_dir),
+        name='summary_report'
+    )
 
     # Workflow
     toplevel_wf = pe.Workflow(
@@ -102,31 +107,40 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
         (func_preproc_wf, template_reg_wf, [
             ('outputs.sbref_preproc', 'inputs.sbref_preproc'),
             ('outputs.bold_preproc', 'inputs.bold_preproc'),
-            ('outputs.seepi_unwarp_mean', 'inputs.seepi_unwarp_mean')
+            ('outputs.seepi_unwarp_mean', 'inputs.seepi_unwarp_mean'),
+            ('outputs.topup_b0_rads', 'inputs.topup_b0_rads')
         ]),
 
         # Connect QC workflow
-        (template_reg_wf, qc_wf, [('outputs.tpl_bold_preproc', 'inputs.bold')]),
-        (inputs, qc_wf, [('tpl_dseg', 'inputs.labels')]),
+        (inputs, qc_wf, [
+            ('bold_meta', 'inputs.bold_meta'),
+            ('tpl_dseg', 'inputs.tpl_dseg')
+        ]),
+        (func_preproc_wf, qc_wf, [('outputs.moco_pars', 'inputs.moco_pars')]),
+        (template_reg_wf, qc_wf, [
+            ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
+            ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
+        ]),
 
         # Connect derivatives outputs
         (inputs, derivatives_wf, [('bold', 'inputs.source_file')]),
-        (func_preproc_wf, derivatives_wf, [('outputs.moco_pars', 'inputs.moco_pars')]),
 
         # Write individual template-space results to derivatives folder
         (template_reg_wf, derivatives_wf, [
             ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
             ('outputs.tpl_sbref_preproc', 'inputs.tpl_sbref_preproc'),
             ('outputs.tpl_seepi_unwarp_mean', 'inputs.tpl_seepi_unwarp_mean'),
+            ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
         ]),
 
         # Write QC results to derivatives folder
         (qc_wf, derivatives_wf, [
-            ('outputs.bold_tmean', 'inputs.tpl_bold_tmean'),
-            ('outputs.bold_tsd', 'inputs.tpl_bold_tsd'),
-            ('outputs.bold_detrended', 'inputs.tpl_bold_detrended'),
-            ('outputs.bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
-            ('outputs.bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats')
+            ('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean'),
+            ('outputs.tpl_bold_tsd', 'inputs.tpl_bold_tsd'),
+            ('outputs.tpl_bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
+            ('outputs.tpl_bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats'),
+            ('outputs.tpl_sigloss', 'inputs.tpl_sigloss'),
+            ('outputs.motion_csv', 'inputs.motion_csv')
         ]),
 
         # Write atlas images and templates to derivatives folder
@@ -136,6 +150,12 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
             ('tpl_pseg', 'inputs.tpl_pseg'),
             ('tpl_dseg', 'inputs.tpl_dseg'),
             ('tpl_bmask', 'inputs.tpl_bmask')
+        ]),
+
+        # Summary report
+        (inputs, summary_report, [
+            ('bold', 'source_bold'),
+            ('bold_meta', 'source_bold_meta')
         ])
     ])
 
