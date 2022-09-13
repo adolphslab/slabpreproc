@@ -156,6 +156,10 @@ def build_toplevel_wf(work_dir, deriv_dir):
         (inputs, summary_report, [
             ('bold', 'source_bold'),
             ('bold_meta', 'source_bold_meta')
+        ]),
+        (qc_wf, summary_report, [
+            ('outputs.tpl_bold_tsfnr', 'tsfnr'),
+            ('outputs.motion_csv', 'motion_csv')
         ])
     ])
 

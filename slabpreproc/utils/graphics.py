@@ -6,22 +6,27 @@ AUTHOR : Mike Tyszka
 PLACE  : Caltech
 DATES  : 2019-05-31 JMT From scratch
 
-This file is part of CBICQC.
+MIT License
 
-   CBICQC is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
+Copyright (c) 2022 Mike Tyszka
 
-   CBICQC is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-   You should have received a copy of the GNU General Public License
-  along with CBICQC.  If not, see <http://www.gnu.org/licenses/>.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Copyright 2019 California Institute of Technology.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 """
 
 import numpy as np
@@ -30,108 +35,13 @@ import matplotlib.pyplot as plt
 from scipy.signal import periodogram
 from skimage.util import montage
 from skimage.exposure import rescale_intensity
-import pandas as pd
-from datetime import date
-
-from .moco import total_rotation
 
 
-def plot_roi_timeseries(t, s_mean_t, s_fit_t, s_detrend_t, plot_fname):
-    """
-    Plot spatial mean ROI signals vs time
-
-    :param t: float array, time vector (s)
-    :param s_mean_t:
-    :param s_fit_t:
-    :param s_detrend_t:
-    :param plot_fname:
-    :return:
-    """
-
-    roi_names = ['Air', 'Nyquist Ghost', 'Signal']
-
-    fig, axs = plt.subplots(3, 1, figsize=(10, 5))
-
-    for lc in range(0, 3):
-
-        axs[lc].plot(t, s_mean_t[lc, :], label='Raw')
-        axs[lc].plot(t, s_detrend_t[lc, :], label='Model')
-        axs[lc].plot(t, s_fit_t[lc, :], label='Detrended')
-        axs[lc].set_title(roi_names[lc], loc='left')
-        axs[lc].grid(color='gray', linestyle=':', linewidth=1)
-
-    # Add x label to final subplot
-    axs[2].set_xlabel('Time (s)')
-
-    handles, labels = axs[2].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', ncol=3)
-
-    # Space subplots without title overlap
-    plt.tight_layout()
-
-    # Save plot to file
-    plt.savefig(plot_fname, dpi=300)
-
-    # Close plot
-    plt.close()
-
-
-def plot_roi_powerspec(t, s_detrend_t, plot_fname):
-    """
-    Plot ROI timeseries power spectra
-
-    :param t: float array, time vector (s)
-    :param s_detrend_t:
-    :param plot_fname:
-    :return:
-    """
-
-    titles = ['Air (dB)', 'Nyquist Ghost (dB)', 'Signal (dB)']
-
-    # Sampling frequency (Hz)
-    fs = 1.0 / (t[1] - t[0])
-
-    # Power spectra of detrending residual for each ROI
-    f, pspec = periodogram(s_detrend_t, fs, scaling='spectrum')
-
-    # Drop first time point (zeros)
-    pspec = pspec[:, 1:]
-    f = f[1:]
-
-    fig, axs = plt.subplots(3, 1, figsize=(10, 5))
-
-    for lc in range(0, 3):
-
-        # Power dB relative to row max
-        p = pspec[lc, :]
-        p_max = np.max(p)
-        if p_max < 1e-10:
-            p_db = np.zeros_like(p)
-        else:
-            p_db = 10.0 * np.log10(p / np.max(p))
-
-        axs[lc].plot(f, p_db)
-        axs[lc].set_title(titles[lc], loc='left')
-        axs[lc].grid(color='gray', linestyle=':', linewidth=1)
-
-    # Add x label to final subplot
-    axs[2].set_xlabel('Frequency (Hz)')
-
-    # Space subplots without title overlap
-    plt.tight_layout()
-
-    # Save plot to file
-    plt.savefig(plot_fname, dpi=300)
-
-    # Close plot
-    plt.close()
-
-
-def plot_mopar_timeseries(moco_df, plot_fname):
+def plot_motion_timeseries(motion_df, plot_fname):
     """
     Plots x, y, z displacement and rotation timeseries from MCFLIRT registrations
 
-    :param moco_df: dataframe
+    :param motion_df: dataframe
         Motion correction parameters
     :param plot_fname: str
         Output plot filename
@@ -141,7 +51,7 @@ def plot_mopar_timeseries(moco_df, plot_fname):
     fig, axs = plt.subplots(2, 1, figsize=(10, 5))
 
     # Plot axis displacements in mm
-    moco_df.plot(
+    motion_df.plot(
         x='Time_s',
         y=['Dx_mm', 'Dy_mm', 'Dz_mm'],
         kind='line',
@@ -150,7 +60,7 @@ def plot_mopar_timeseries(moco_df, plot_fname):
     axs[0].grid(color='gray', linestyle=':', linewidth=1)
 
     # Plot axis rotations in radians
-    moco_df.plot(
+    motion_df.plot(
         x='Time_s',
         y=['Rx_rad', 'Ry_rad', 'Rz_rad'],
         kind='line',
@@ -168,37 +78,31 @@ def plot_mopar_timeseries(moco_df, plot_fname):
     plt.close()
 
 
-def plot_mopar_powerspec(moco_df, plot_fname):
+def plot_motion_powerspec(motion_df, plot_fname):
     """
     Plot total motion power spectrum
 
-    :param moco_df: dataframe
+    :param motion_df: dataframe
 
     :param plot_fname:
     :return:
     """
 
     # Extract vectors from dataframe
-    t = moco_df['Time_s'].values
+    t = motion_df['Time_s'].values
 
     # Extract moco par values as numpy arrays
-    Dxyz = moco_df[['Dx_mm', 'Dy_mm', 'Dz_mm']].values
-    Rxyz = moco_df[['Rx_rad', 'Ry_rad', 'Rz_rad']].values
+    Dxyz = motion_df[['Dx_mm', 'Dy_mm', 'Dz_mm']].values
+    Rxyz = motion_df[['Rx_rad', 'Ry_rad', 'Rz_rad']].values
 
     # Sampling frequency (Hz)
     fs = 1.0 / (t[1] - t[0])
 
-    # Total displacement timecourse (mm)
-    dtot = np.linalg.norm(Dxyz, ord=2, axis=1)
+    # Framewise displacement timeseries
+    fd = motion_df['FD_mm']
 
-    # Total rotation timecourse (degrees)
-    rtot = total_rotation(Rxyz)
-
-    # Total motion array
-    mtot = np.array([dtot, rtot])
-
-    # Power spectra of total displacement and rotation timecourses
-    f, pspec = periodogram(mtot, fs, scaling='spectrum')
+    # Power spectra framewise displacement
+    f, pspec = periodogram(fd, fs, scaling='spectrum')
 
     # Drop first point (zero)
     pspec = pspec[:, 1:]

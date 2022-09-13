@@ -48,6 +48,18 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
+    tsfnr = File(
+        desc='tSFNR image file',
+        exists=True,
+        mandatory=True
+    )
+
+    motion_csv = File(
+        desc='Motion parameter CSV table',
+        exists=True,
+        mandatory=True
+    )
+
 
 class SummaryReport(BaseInterface):
 
@@ -56,10 +68,17 @@ class SummaryReport(BaseInterface):
 
     def _run_interface(self, runtime):
 
+        # Construct dictionary of required files to pass to ReportPDF
+        report_files = {
+            'SourceBOLD': self.inputs.source_bold,
+            'tSFNR': self.inputs.tsfnr,
+            'MotionTable': self.inputs.motion_csv,
+        }
+
         # Build summary report for the slabpreproc of the source BOLD image
         ReportPDF(
             self._gen_report_dname(),
-            self.inputs.source_bold,
+            report_files,
             self.inputs.source_bold_meta
         )
 
