@@ -78,6 +78,7 @@ def build_toplevel_wf(work_dir, deriv_dir):
     # Summary report node
     summary_report = pe.Node(
         SummaryReport(deriv_dir=deriv_dir),
+        overwrite=True,  # Always regenerate report
         name='summary_report'
     )
 

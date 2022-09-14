@@ -105,28 +105,22 @@ def plot_motion_powerspec(motion_df, plot_fname):
     f, pspec = periodogram(fd, fs, scaling='spectrum')
 
     # Drop first point (zero)
-    pspec = pspec[:, 1:]
     f = f[1:]
+    pspec = pspec[1:]
 
-    fig, axs = plt.subplots(2, 1, figsize=(10, 5))
-    titles = ['Displacement (dB)', 'Rotation (dB)']
+    fig, axs = plt.subplots(1, 1, figsize=(10, 5))
 
-    for lc in range(0, 2):
+    # Power dB relative to row max
+    p_max = np.max(pspec)
+    if p_max < 1e-10:
+        p_db = np.zeros_like(pspec)
+    else:
+        p_db = 10.0 * np.log10(pspec / np.max(pspec))
 
-        # Power dB relative to row max
-        p = pspec[lc, :]
-        p_max = np.max(p)
-        if p_max < 1e-10:
-            p_db = np.zeros_like(p)
-        else:
-            p_db = 10.0 * np.log10(p / np.max(p))
-
-        axs[lc].plot(f, p_db)
-        axs[lc].set_title(titles[lc], loc='left')
-        axs[lc].grid(color='gray', linestyle=':', linewidth=1)
-
-    # Add x axis label to last subplot
-    axs[1].set_xlabel('Frequency (Hz)')
+    axs.plot(f, p_db)
+    axs.set_title('Framewise Displacement (mm)', loc='left')
+    axs.grid(color='gray', linestyle=':', linewidth=1)
+    axs.set_xlabel('Frequency (Hz)')
 
     # Space subplots without title overlap
     plt.tight_layout()
@@ -139,7 +133,6 @@ def plot_motion_powerspec(motion_df, plot_fname):
 
 
 def orthoslices(img_nii, ortho_fname, cmap='viridis', irng='default'):
-
     img3d = img_nii.get_data()
 
     # Intensity scaling
@@ -154,7 +147,7 @@ def orthoslices(img_nii, ortho_fname, cmap='viridis', irng='default'):
     fig, axs = plt.subplots(1, 3, figsize=(7, 2.4), constrained_layout=True)
 
     nx, ny, nz = img3d.shape
-    hx, hy, hz = int(nx/2), int(ny/2), int(nz/2)
+    hx, hy, hz = int(nx / 2), int(ny / 2), int(nz / 2)
 
     # Extract central section for each orientation
     # Assumes RAS orientation
@@ -205,7 +198,6 @@ def orthoslices(img_nii, ortho_fname, cmap='viridis', irng='default'):
 
 
 def orthoslice_montage(img_nii, montage_fname, cmap='viridis', irng='default'):
-
     orient_name = ['Axial', 'Coronal', 'Sagittal']
 
     img3d = img_nii.get_data()
@@ -220,7 +212,7 @@ def orthoslice_montage(img_nii, montage_fname, cmap='viridis', irng='default'):
 
         # Downsample to 9 images in first dimension
         nx = s.shape[0]
-        xx = np.linspace(0, nx-1, 9).astype(int)
+        xx = np.linspace(0, nx - 1, 9).astype(int)
         s = s[xx, :, :]
 
         # Construct 3x3 montage of slices
@@ -236,7 +228,7 @@ def orthoslice_montage(img_nii, montage_fname, cmap='viridis', irng='default'):
             # Do nothing
             pass
 
-        plt.subplot(1, 3, ax+1)
+        plt.subplot(1, 3, ax + 1)
         plt.imshow(m2d,
                    cmap=plt.get_cmap(cmap),
                    aspect='equal',
@@ -256,73 +248,50 @@ def orthoslice_montage(img_nii, montage_fname, cmap='viridis', irng='default'):
     plt.close()
 
 
-def roi_demeaned_ts(img_nii, rois_nii, residuals_fname):
-    """
-    Create temporal-spatial image of demeaned voxel timecourse
-    - one graymap per ROI
-    - subsample voxels in each ROI to yield n_samp timeseries
+def image_montage(img3d, montage_fname, dims=(4, 6), cmap='viridis', irng='default', axis=2):
 
-    :param img_nii:
-    :param rois_nii:
-    :param residuals_fname: str, ROI residuals PNG filename
-    :return:
-    """
+    # Montage dimensions
+    n_rows, n_cols = dims
 
-    # Number of voxel samples from each ROI
-    n_samp = 200
+    # Downsample to 4x6 = 24 images in specified axis
+    nn = img3d.shape[axis]
+    inds = np.linspace(0, nn - 1, n_rows * n_cols).astype(int)
 
-    roi_name = ['Air', 'Nyquist Ghost', 'Signal']
+    # Downsample and reorder axis to place downsampled axis first
+    if axis == 0:
+        img3d = img3d[inds, ...]
+    elif axis == 1:
+        img3d = img3d[:, inds, :].transpose([1, 0, 2])
+    else:
+        img3d = img3d[..., inds].transpose([2, 0, 1])
 
-    rois = rois_nii.get_data()
-    s = img_nii.get_data()
+    # Construct 3x3 montage of slices
+    m2d = montage(img3d, fill='mean', grid_shape=(n_rows, n_cols))
 
-    # Number of time points and labels
-    nt = s.shape[3]
+    # Intensity scaling
+    if 'default' in irng:
+        m2d = rescale_intensity(m2d, in_range='image', out_range=(0, 1))
+    elif 'robust' in irng:
+        pmin, pmax = np.percentile(m2d, (1, 99))
+        m2d = rescale_intensity(m2d, in_range=(pmin, pmax), out_range=(0, 1))
+    else:
+        # Do nothing
+        pass
 
-    fig, axs = plt.subplots(3, 1, figsize=(7, 9))
-    fig.subplots_adjust(left=0.02, bottom=0.06, right=0.95, top=0.94, wspace=0.05)
+    fig, axs = plt.subplots(1, 1, figsize=(18, 12))
+    axs.imshow(
+        m2d,
+        cmap=plt.get_cmap(cmap),
+        aspect='equal',
+        origin='lower'
+    )
 
-    for lc in range(3):
-
-        # Skip label 0 - use lc+1 to index ROI labels
-        mask3d = np.array(rois == (lc+1))
-        mask4d = np.tile(mask3d[:, :, :, np.newaxis], (1, 1, 1, nt))
-
-        nx = np.sum(mask3d)
-
-        s_xt = s[mask4d].reshape(nx, nt)
-
-        # Downsample spatial dimension to n_samp
-        inds = np.linspace(0, nx-1, n_samp).astype(int)
-        s_xt_d = s_xt[inds, :]
-
-        # Demean rows
-        row_means = np.mean(s_xt_d, axis=1)
-        res = s_xt_d.astype(np.float64) - np.tile(row_means[:, np.newaxis], (1, nt))
-
-        # Find abs max of residual
-        amax = np.abs(res).max()
-
-        # Plot graymap
-        pobj = axs[lc].imshow(
-            res,
-            vmin=-amax,
-            vmax=amax,
-            cmap=plt.get_cmap('viridis'),
-            aspect='auto',
-            origin='upper'
-        )
-
-        fig.colorbar(pobj, ax=axs[lc])
-
-        axs[lc].set_title(roi_name[lc])
-        axs[lc].set_axis_off()
-
-    # Adjust space around plots
+    # Tidy up axes
+    plt.axis('off')
     plt.tight_layout()
 
     # Save plot to file
-    plt.savefig(residuals_fname, dpi=300)
+    plt.savefig(montage_fname, dpi=300)
 
     # Close plot
     plt.close()

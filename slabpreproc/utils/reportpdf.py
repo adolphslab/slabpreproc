@@ -42,7 +42,7 @@ import bids
 import os.path as op
 import datetime as dt
 import pandas as pd
-from glob import glob
+import nibabel as nib
 
 from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
@@ -164,9 +164,8 @@ class ReportPDF:
 
     def _add_motion_timeseries(self):
 
-        # Load motion dataframe
-        motion_csv = self._find_file('qc', 'recon-motion_pars.csv')
-        motion_df = pd.read_csv(motion_csv)
+        # Load motion parameter table
+        motion_df = pd.read_csv(self._report_files['MotionTable'])
 
         # Build motion timeseries plot
         motion_ts_png = self._gen_fig_fname('motion_ts')
@@ -179,15 +178,11 @@ class ReportPDF:
         # Page break
         self._contents.append(PageBreak())
 
-        #
         # Motion Parameter Timeseries
-        #
-
         ptext = '<font size=14><b>Motion Parameter Timeseries</b></font>'
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.2 * inch))
 
-        #
         ptext = """
         <font size=11>
         Head motion correction parameter timeseries
@@ -222,6 +217,13 @@ class ReportPDF:
 
     def _add_image_montages(self):
 
+        # Load tSFNR image
+        tsfnr_img = nib.load(self._report_files['tSFNR']).get_fdata()
+
+        # Build tSFNR montage
+        tsfnr_png = self._gen_fig_fname('tsfnr')
+        graphics.image_montage(tsfnr_img, tsfnr_png)
+
         # Page break
         self._contents.append(PageBreak())
 
@@ -229,26 +231,18 @@ class ReportPDF:
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.25 * inch))
 
-        self._add_montage('Temporal Mean', self._fnames['TMeanMontage'])
-        self._add_montage('Temporal Standard Deviation', self._fnames['TSDMontage'])
-        self._add_montage('Regions of Interest', self._fnames['ROIsMontage'])
+        self._add_montage('Temporal SFNR', tsfnr_png)
 
-    def _add_montage(self, title, img_fname):
+    def _add_montage(self, title, png_fname):
 
         ptext = '<font size=11><b>{}</b></font>'.format(title)
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.1 * inch))
 
-        tmean_montage_img = Image(img_fname, 7.0 * inch, 2.4 * inch, hAlign='LEFT')
+        tmean_montage_img = Image(png_fname, 7.0 * inch, 2.4 * inch, hAlign='LEFT')
 
         self._contents.append(tmean_montage_img)
         self._contents.append(Spacer(1, 0.25 * inch))
-
-    def _find_file(self, subdir, suffix):
-
-        search_dir = op.join(self._deriv_dir, subdir)
-        candidates = sorted(glob(op.join(search_dir, f'*{suffix}*')))
-        return candidates[0]
 
     def _gen_fig_fname(self, suffix):
         return op.join(self._report_dir, f'{self._prefix}_{suffix}.png')
