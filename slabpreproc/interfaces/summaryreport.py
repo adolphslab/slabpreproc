@@ -48,8 +48,26 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
+    mseepi = File(
+        desc='Mean SEEPI image file',
+        exists=True,
+        mandatory=True
+    )
+
+    tmean = File(
+        desc='Temporal mean BOLD image file',
+        exists=True,
+        mandatory=True
+    )
+
     tsfnr = File(
         desc='tSFNR image file',
+        exists=True,
+        mandatory=True
+    )
+
+    dropout = File(
+        desc='Estimated dropout image file',
         exists=True,
         mandatory=True
     )
@@ -71,7 +89,10 @@ class SummaryReport(BaseInterface):
         # Construct dictionary of required files to pass to ReportPDF
         report_files = {
             'SourceBOLD': self.inputs.source_bold,
+            'mSEEPI': self.inputs.mseepi,
+            'tMean': self.inputs.tmean,
             'tSFNR': self.inputs.tsfnr,
+            'Dropout': self.inputs.dropout,
             'MotionTable': self.inputs.motion_csv,
         }
 

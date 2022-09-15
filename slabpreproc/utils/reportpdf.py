@@ -84,10 +84,16 @@ class ReportPDF:
         keys = bids.layout.parse_file_entities(self._report_files['SourceBOLD'])
         subj_id, sess_id, task_id = keys['subject'], keys['session'], keys['task']
 
-        # Add subject, session and task IDs to metadata dict
+        # Load header info from BOLD Nifti file
+        bold_nii = nib.load(self._report_files['SourceBOLD'])
+        bold_hdr = bold_nii.header
+
+        # Merge image file metadata into main dict
         self._metadata['Subject'] = subj_id
         self._metadata['Session'] = sess_id
         self._metadata['Task'] = task_id
+        self._metadata['MatrixSize'] = bold_hdr.get_data_shape()
+        self._metadata['VoxelSize'] = bold_hdr.get_zooms()[:3]
 
         # General prefix
         self._prefix = f'sub-{subj_id}_ses-{sess_id}_task-{task_id}'
@@ -147,13 +153,13 @@ class ReportPDF:
         ]
 
         image = [
-            ['Repetition Time', '{} ms'.format(self._metadata['RepetitionTime'] * 1e3)],
-            ['Echo Time', '{} ms'.format(self._metadata['EchoTime'] * 1e3)],
-            # ['Voxel Size', '{} mm'.format(self._metadata['VoxelSize'])],
-            # ['Matrix Size', self._metadata['MatrixSize']],
-            ['EPI Echo Spacing', '{0:.0f} us'.format(self._metadata['EffectiveEchoSpacing'] * 1e6)],
-            ['RO Bandwidth', '{} Hz/pix'.format(self._metadata['PixelBandwidth'])],
-            ['PE Bandwidth', '{} Hz/pix'.format(self._metadata['BandwidthPerPixelPhaseEncode'])]
+            ["Repetition Time (ms)", f"{self._metadata['RepetitionTime'] * 1e3}"],
+            ["Echo Time (ms)", f"{self._metadata['EchoTime'] * 1e3}"],
+            ["Voxel Size (mm)", ' x '.join([f'{a:0.1f}' for a in self._metadata['VoxelSize']])],
+            ["Matrix Size", ' x '.join([f'{a:d}' for a in self._metadata['MatrixSize']])],
+            ["EPI Echo Spacing (us)", f"{self._metadata['EffectiveEchoSpacing'] * 1e6:0.0f}"],
+            ["RO Bandwidth (Hz/pix)", f"{self._metadata['PixelBandwidth']}"],
+            ["PE Bandwidth (Hz/pix)", f"{self._metadata['BandwidthPerPixelPhaseEncode']}"]
         ]
 
         demo_table = Table(demo, hAlign='LEFT')
@@ -167,13 +173,10 @@ class ReportPDF:
         # Load motion parameter table
         motion_df = pd.read_csv(self._report_files['MotionTable'])
 
-        # Build motion timeseries plot
-        motion_ts_png = self._gen_fig_fname('motion_ts')
-        graphics.plot_motion_timeseries(motion_df, motion_ts_png)
-
-        # Build motion power spectrum plot
-        motion_ps_png = self._gen_fig_fname('motion_ps')
-        graphics.plot_motion_powerspec(motion_df, motion_ps_png)
+        # Scale rotations to milliradians
+        motion_df['Rx_mrad'] = motion_df['Rx_rad'] * 1e3
+        motion_df['Ry_mrad'] = motion_df['Ry_rad'] * 1e3
+        motion_df['Rz_mrad'] = motion_df['Rz_rad'] * 1e3
 
         # Page break
         self._contents.append(PageBreak())
@@ -185,44 +188,47 @@ class ReportPDF:
 
         ptext = """
         <font size=11>
-        Head motion correction parameter timeseries
+        Head motion correction displacements, rotations and framewise displacements (FD) over time
         </font>
         """
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.2 * inch))
 
-        mo_ts_img = Image(motion_ts_png, 7.0 * inch, 3.5 * inch, hAlign='LEFT')
+        # Build motion timeseries plot
+        figsize = (7, 5.0)
+        motion_ts_png = self._gen_fig_fname('motion_ts')
+        graphics.plot_motion_timeseries(motion_df, motion_ts_png, figsize)
+
+        # Add figure to report
+        mo_ts_img = Image(motion_ts_png, figsize[0] * inch, figsize[1] * inch, hAlign='LEFT')
         self._contents.append(mo_ts_img)
 
         self._contents.append(Spacer(1, 0.2 * inch))
 
         # FD and lpf FD power spectra
-        ptext = '<font size=14><b>Motion Power Spectra</b></font>'
+        ptext = '<font size=14><b>Motion Power Spectrum</b></font>'
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.2 * inch))
 
         ptext = """
         <font size=11>
-        Power spectrum of the absolute displacement and total rotation timecourses.
-        dB scale referenced to maximum spectral power.
+        Power spectrum of the framewise displacement time course.
         </font>
         """
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.2 * inch))
 
-        motion_ps_img = Image(motion_ps_png, 7.0 * inch, 3.5 * inch, hAlign='LEFT')
+        # Build motion power spectrum plot
+        figsize = (7, 2.5)
+        motion_ps_png = self._gen_fig_fname('motion_ps')
+        graphics.plot_motion_powerspec(motion_df, motion_ps_png, figsize)
+
+        motion_ps_img = Image(motion_ps_png, figsize[0] * inch, figsize[1] * inch, hAlign='LEFT')
         self._contents.append(motion_ps_img)
 
         self._contents.append(Spacer(1, 0.2 * inch))
 
     def _add_image_montages(self):
-
-        # Load tSFNR image
-        tsfnr_img = nib.load(self._report_files['tSFNR']).get_fdata()
-
-        # Build tSFNR montage
-        tsfnr_png = self._gen_fig_fname('tsfnr')
-        graphics.image_montage(tsfnr_img, tsfnr_png)
 
         # Page break
         self._contents.append(PageBreak())
@@ -231,15 +237,37 @@ class ReportPDF:
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.25 * inch))
 
-        self._add_montage('Temporal SFNR', tsfnr_png)
+        # Add tSFNR montage
+        tsfnr_img = nib.load(self._report_files['tSFNR']).get_fdata()
+        tsfnr_png = self._gen_fig_fname('tsfnr')
+        hw_ratio = graphics.image_montage(tsfnr_img, tsfnr_png, dims=(3, 8), cmap='gnuplot2', irng='robust')
+        self._add_montage('Temporal SFNR', tsfnr_png, (7.0, 7.0 * hw_ratio))
 
-    def _add_montage(self, title, png_fname):
+        # Add mSEEPI montage
+        mseepi_img = nib.load(self._report_files['mSEEPI']).get_fdata()
+        mseepi_png = self._gen_fig_fname('mseepi')
+        hw_ratio = graphics.image_montage(mseepi_img, mseepi_png, dims=(3, 8), cmap='gray', irng='robust')
+        self._add_montage('Mean SE-EPI', mseepi_png, (7.0, 7.0 * hw_ratio))
+
+        # Add tMean montage
+        tmean_img = nib.load(self._report_files['tMean']).get_fdata()
+        tmean_png = self._gen_fig_fname('tmean')
+        hw_ratio = graphics.image_montage(tmean_img, tmean_png, dims=(3, 8), cmap='gray', irng='robust')
+        self._add_montage('Temporal mean BOLD', tmean_png, (7.0, 7.0 * hw_ratio))
+
+        # Add dropout montage
+        dropout_img = nib.load(self._report_files['Dropout']).get_fdata()
+        dropout_png = self._gen_fig_fname('dropout')
+        hw_ratio = graphics.image_montage(dropout_img, dropout_png, dims=(3, 8), cmap='gray', irng='robust')
+        self._add_montage('Estimated BOLD dropout', dropout_png, (7.0, 7.0 * hw_ratio))
+
+    def _add_montage(self, title, png_fname, figsize=(7.0, 7.0)):
 
         ptext = '<font size=11><b>{}</b></font>'.format(title)
         self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
         self._contents.append(Spacer(1, 0.1 * inch))
 
-        tmean_montage_img = Image(png_fname, 7.0 * inch, 2.4 * inch, hAlign='LEFT')
+        tmean_montage_img = Image(png_fname, figsize[0] * inch, figsize[1] * inch, hAlign='LEFT')
 
         self._contents.append(tmean_montage_img)
         self._contents.append(Spacer(1, 0.25 * inch))

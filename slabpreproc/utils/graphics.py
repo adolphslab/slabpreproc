@@ -37,18 +37,24 @@ from skimage.util import montage
 from skimage.exposure import rescale_intensity
 
 
-def plot_motion_timeseries(motion_df, plot_fname):
+def plot_motion_timeseries(motion_df, plot_fname, figsize=(7, 5)):
     """
-    Plots x, y, z displacement and rotation timeseries from MCFLIRT registrations
+    Plot head motion displacement, rotation and framewise displacement from
+    MCFLIRT registrations
 
     :param motion_df: dataframe
         Motion correction parameters
-    :param plot_fname: str
+    :param plot_fname: str, pathlike
         Output plot filename
+    :param figsize: tuple, floats
+        Final figure size in PDF
     :return:
     """
 
-    fig, axs = plt.subplots(2, 1, figsize=(10, 5))
+    # Upscale factor to keep labels small
+    up_sf = 1.5
+
+    fig, axs = plt.subplots(3, 1, figsize=tuple(np.array(figsize) * up_sf))
 
     # Plot axis displacements in mm
     motion_df.plot(
@@ -57,16 +63,31 @@ def plot_motion_timeseries(motion_df, plot_fname):
         kind='line',
         ax=axs[0]
     )
+    axs[0].set_title('Head Displacement (mm)', loc='left')
     axs[0].grid(color='gray', linestyle=':', linewidth=1)
+    axs[0].axes.xaxis.set_visible(False)
 
     # Plot axis rotations in radians
     motion_df.plot(
         x='Time_s',
-        y=['Rx_rad', 'Ry_rad', 'Rz_rad'],
+        y=['Rx_mrad', 'Ry_mrad', 'Rz_mrad'],
         kind='line',
         ax=axs[1]
     )
+    axs[1].set_title('Head Rotation (mrad)', loc='left')
     axs[1].grid(color='gray', linestyle=':', linewidth=1)
+    axs[1].axes.xaxis.set_visible(False)
+
+    # Plot framewise displacement in mm
+    motion_df.plot(
+        x='Time_s',
+        y=['FD_mm', 'lpf_FD_mm'],
+        kind='line',
+        ax=axs[2]
+    )
+    axs[2].set_title('Framewise displacement (mm)', loc='left')
+    axs[2].grid(color='gray', linestyle=':', linewidth=1)
+    axs[2].set_xlabel('Time (s)')
 
     # Space subplots without title overlap
     plt.tight_layout()
@@ -78,22 +99,26 @@ def plot_motion_timeseries(motion_df, plot_fname):
     plt.close()
 
 
-def plot_motion_powerspec(motion_df, plot_fname):
+def plot_motion_powerspec(motion_df, plot_fname, figsize=(7.0, 3.0)):
     """
-    Plot total motion power spectrum
+    Plot head motion framewise displacement power spectrum
 
     :param motion_df: dataframe
-
-    :param plot_fname:
+        Motion correction parameters
+    :param plot_fname: str, pathlike
+        Output plot filename
+    :param figsize: tuple, floats
+        Final figure size in PDF
     :return:
     """
 
+    # Upscale factor to keep labels small
+    up_sf = 1.5
+
+    fig, axs = plt.subplots(1, 1, figsize=tuple(np.array(figsize) * up_sf))
+
     # Extract vectors from dataframe
     t = motion_df['Time_s'].values
-
-    # Extract moco par values as numpy arrays
-    Dxyz = motion_df[['Dx_mm', 'Dy_mm', 'Dz_mm']].values
-    Rxyz = motion_df[['Rx_rad', 'Ry_rad', 'Rz_rad']].values
 
     # Sampling frequency (Hz)
     fs = 1.0 / (t[1] - t[0])
@@ -108,17 +133,8 @@ def plot_motion_powerspec(motion_df, plot_fname):
     f = f[1:]
     pspec = pspec[1:]
 
-    fig, axs = plt.subplots(1, 1, figsize=(10, 5))
-
-    # Power dB relative to row max
-    p_max = np.max(pspec)
-    if p_max < 1e-10:
-        p_db = np.zeros_like(pspec)
-    else:
-        p_db = 10.0 * np.log10(pspec / np.max(pspec))
-
-    axs.plot(f, p_db)
-    axs.set_title('Framewise Displacement (mm)', loc='left')
+    axs.plot(f, pspec)
+    axs.set_title('Framewise Displacement Power Spectrum', loc='left')
     axs.grid(color='gray', linestyle=':', linewidth=1)
     axs.set_xlabel('Frequency (Hz)')
 
@@ -133,6 +149,15 @@ def plot_motion_powerspec(motion_df, plot_fname):
 
 
 def orthoslices(img_nii, ortho_fname, cmap='viridis', irng='default'):
+    """
+
+    :param img_nii:
+    :param ortho_fname:
+    :param cmap:
+    :param irng:
+    :return:
+    """
+
     img3d = img_nii.get_data()
 
     # Intensity scaling
@@ -198,6 +223,15 @@ def orthoslices(img_nii, ortho_fname, cmap='viridis', irng='default'):
 
 
 def orthoslice_montage(img_nii, montage_fname, cmap='viridis', irng='default'):
+    """
+
+    :param img_nii:
+    :param montage_fname:
+    :param cmap:
+    :param irng:
+    :return:
+    """
+
     orient_name = ['Axial', 'Coronal', 'Sagittal']
 
     img3d = img_nii.get_data()
@@ -229,10 +263,11 @@ def orthoslice_montage(img_nii, montage_fname, cmap='viridis', irng='default'):
             pass
 
         plt.subplot(1, 3, ax + 1)
-        plt.imshow(m2d,
-                   cmap=plt.get_cmap(cmap),
-                   aspect='equal',
-                   origin='lower')
+        plt.imshow(
+            m2d,
+            cmap=plt.get_cmap(cmap),
+            aspect='equal'
+        )
         plt.title(orient_name[ax])
 
         plt.axis('off')
@@ -248,43 +283,70 @@ def orthoslice_montage(img_nii, montage_fname, cmap='viridis', irng='default'):
     plt.close()
 
 
-def image_montage(img3d, montage_fname, dims=(4, 6), cmap='viridis', irng='default', axis=2):
+def image_montage(img3d, montage_fname, dims=(4, 6), cmap='magma', irng='default', axis=2):
+    """
+    Create a montage over an axis of the signal-containing region of a 3D image volume
+
+    :param img3d: numpy array
+        3D scalar image volume with possible empty regions
+    :param montage_fname: str, pathlike
+        Output filename for image montage PNG
+    :param dims: tuple
+        Montage dimensions (rows, columns)
+    :param cmap:
+        Colormap to use for montage
+    :param irng: str or tuple
+        Intensity range to use for montage. See skimage.exposure.rescale_intensity
+    :param axis:
+        Axis perpendicular to montage subimage plane
+    :return hw_ratio: float
+        Height/width ratio of montage image
+    """
 
     # Montage dimensions
     n_rows, n_cols = dims
 
+    # Crop image to minimum non-zero bounding box
+    # Removes empty slices outside of imaged slab embedded in larger volume
+    img3d_crop = min_nonzero_crop(img3d)
+
     # Downsample to 4x6 = 24 images in specified axis
-    nn = img3d.shape[axis]
+    nn = img3d_crop.shape[axis]
     inds = np.linspace(0, nn - 1, n_rows * n_cols).astype(int)
 
     # Downsample and reorder axis to place downsampled axis first
     if axis == 0:
-        img3d = img3d[inds, ...]
+        img3d_dwn = img3d_crop[inds, ...]
     elif axis == 1:
-        img3d = img3d[:, inds, :].transpose([1, 0, 2])
+        img3d_dwn = img3d_crop[:, inds, :].transpose([1, 0, 2])
     else:
-        img3d = img3d[..., inds].transpose([2, 0, 1])
+        img3d_dwn = img3d_crop[..., inds].transpose([2, 1, 0])
+        img3d_dwn = np.flip(img3d_dwn, axis=1)
 
     # Construct 3x3 montage of slices
-    m2d = montage(img3d, fill='mean', grid_shape=(n_rows, n_cols))
+    m2d = montage(img3d_dwn, fill='mean', grid_shape=(n_rows, n_cols))
 
     # Intensity scaling
-    if 'default' in irng:
-        m2d = rescale_intensity(m2d, in_range='image', out_range=(0, 1))
-    elif 'robust' in irng:
-        pmin, pmax = np.percentile(m2d, (1, 99))
-        m2d = rescale_intensity(m2d, in_range=(pmin, pmax), out_range=(0, 1))
+    if 'robust' in irng:
+        vmin, vmax = np.percentile(m2d, (10, 98))
     else:
-        # Do nothing
-        pass
+        vmin, vmax = m2d.min(), m2d.max()
 
-    fig, axs = plt.subplots(1, 1, figsize=(18, 12))
-    axs.imshow(
+    # Calculate aspect ratio (w/h) for figure generation
+    hw_ratio = m2d.shape[0] / m2d.shape[1]
+
+    fig, axs = plt.subplots(1, 1, figsize=(12, 12 * hw_ratio))
+
+    mm = axs.imshow(
         m2d,
         cmap=plt.get_cmap(cmap),
         aspect='equal',
-        origin='lower'
+        vmin=vmin,
+        vmax=vmax
     )
+
+    # Add a colorbar
+    plt.colorbar(mm, ax=axs, fraction=0.05, pad=0.02)
 
     # Tidy up axes
     plt.axis('off')
@@ -295,3 +357,20 @@ def image_montage(img3d, montage_fname, dims=(4, 6), cmap='viridis', irng='defau
 
     # Close plot
     plt.close()
+
+    return hw_ratio
+
+
+def min_nonzero_crop(a):
+    """
+
+    :param a: numpy array
+        3D image of slab embedded in a larger zero-filled volume
+    :return a_crop: numpy array
+        3D image of minimum non-zero bounding box
+    """
+
+    b = np.argwhere(a)
+    (x0, y0, z0), (x1, y1, z1) = b.min(0), b.max(0) + 1
+    return a[x0:x1, y0:y1, z0:z1]
+

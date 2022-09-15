@@ -158,8 +158,13 @@ def build_toplevel_wf(work_dir, deriv_dir):
             ('bold', 'source_bold'),
             ('bold_meta', 'source_bold_meta')
         ]),
+        (template_reg_wf, summary_report, [
+            ('outputs.tpl_seepi_unwarp_mean', 'mseepi')
+        ]),
         (qc_wf, summary_report, [
+            ('outputs.tpl_bold_tmean', 'tmean'),
             ('outputs.tpl_bold_tsfnr', 'tsfnr'),
+            ('outputs.tpl_sigloss', 'dropout'),
             ('outputs.motion_csv', 'motion_csv')
         ])
     ])
