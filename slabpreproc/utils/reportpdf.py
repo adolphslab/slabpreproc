@@ -230,47 +230,103 @@ class ReportPDF:
 
     def _add_image_montages(self):
 
-        # Page break
-        self._contents.append(PageBreak())
+        # Get slab limits from mean SE-EPI and use for all montages
+        zlims = graphics.crop_to_slab(self._report_files['mSEEPI'])
 
-        ptext = '<font size=14><b>Image Sections</b></font>'
-        self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
-        self._contents.append(Spacer(1, 0.25 * inch))
+        self._section_title('Anatomic Templates', page_break=True)
+        self._add_montage(img_name='T1Head', title='T1w Head', colormap='gray', zlims=zlims)
+        self._add_montage(img_name='T2Head', title='T2w Head', colormap='gray', zlims=zlims)
 
-        # Add tSFNR montage
-        tsfnr_img = nib.load(self._report_files['tSFNR']).get_fdata()
-        tsfnr_png = self._gen_fig_fname('tsfnr')
-        hw_ratio = graphics.image_montage(tsfnr_img, tsfnr_png, dims=(3, 8), cmap='gnuplot2', irng='robust')
-        self._add_montage('Temporal SFNR', tsfnr_png, (7.0, 7.0 * hw_ratio))
+        self._section_title('Atlas Labels', page_break=True)
+        self._add_montage(img_name='Labels', under_name='T1Head',
+                          title='Atlas Labels', colormap='rainbow', zlims=zlims, scaling='default')
 
-        # Add mSEEPI montage
-        mseepi_img = nib.load(self._report_files['mSEEPI']).get_fdata()
-        mseepi_png = self._gen_fig_fname('mseepi')
-        hw_ratio = graphics.image_montage(mseepi_img, mseepi_png, dims=(3, 8), cmap='gray', irng='robust')
-        self._add_montage('Mean SE-EPI', mseepi_png, (7.0, 7.0 * hw_ratio))
+        self._section_title('Preprocessed EPI', page_break=True)
+        self._add_montage(img_name='mSEEPI', title='Mean SE-EPI', colormap='gray', zlims=zlims)
+        self._add_montage(img_name='tMean', title='Temporal mean BOLD', colormap='gray', zlims=zlims)
 
-        # Add tMean montage
-        tmean_img = nib.load(self._report_files['tMean']).get_fdata()
-        tmean_png = self._gen_fig_fname('tmean')
-        hw_ratio = graphics.image_montage(tmean_img, tmean_png, dims=(3, 8), cmap='gray', irng='robust')
-        self._add_montage('Temporal mean BOLD', tmean_png, (7.0, 7.0 * hw_ratio))
+        self._section_title('Fieldmaps', page_break=True)
+        self._add_montage(img_name='B0rads', title='TOPUP B0 Fieldmap (rad/s)', colormap='seismic', zlims=zlims)
 
-        # Add dropout montage
-        dropout_img = nib.load(self._report_files['Dropout']).get_fdata()
-        dropout_png = self._gen_fig_fname('dropout')
-        hw_ratio = graphics.image_montage(dropout_img, dropout_png, dims=(3, 8), cmap='gray', irng='robust')
-        self._add_montage('Estimated BOLD dropout', dropout_png, (7.0, 7.0 * hw_ratio))
+        self._section_title('Quality Control', page_break=True)
+        self._add_montage(img_name='tSFNR', title='Temporal SFNR', colormap='gnuplot2', zlims=zlims)
+        self._add_montage(img_name='Dropout', title='Estimated BOLD dropout', colormap='magma', zlims=zlims)
 
-    def _add_montage(self, title, png_fname, figsize=(7.0, 7.0)):
+    def _add_montage(
+            self,
+            img_name,
+            title,
+            under_name=None,
+            colormap='gray',
+            scaling='robust',
+            mont_rows_cols=(3, 6),
+            fig_width=7.0,
+            zlims=(0, -1)
+    ):
+        """
+        Add axial image montage to report PDF
 
-        ptext = '<font size=11><b>{}</b></font>'.format(title)
-        self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
-        self._contents.append(Spacer(1, 0.1 * inch))
+        :param img_name: str
+            Report files dictionary field name
+        :param title: str
+            Figure title
+        :param under_name: str
+            Optional underlay field name [None]
+        :param colormap:
+            Figure colormap (default 'gray')
+        :param scaling: str
+            Intensity scaling ('default' or 'robust')
+        :param mont_rows_cols: tuple
+            Montage size (rows, cols)
+        :param fig_width:
+            Figure width in inches (default 7.0 for Letter size)
+        :return:
+            None
+        """
 
-        tmean_montage_img = Image(png_fname, figsize[0] * inch, figsize[1] * inch, hAlign='LEFT')
+        # Load entire image and crop to slab
+        src_img = nib.load(self._report_files[img_name]).get_fdata()
+        slab_img = src_img[:, :, zlims[0]:zlims[1]]
 
-        self._contents.append(tmean_montage_img)
-        self._contents.append(Spacer(1, 0.25 * inch))
+        # Optional underlay image
+        if under_name:
+            under_img = nib.load(self._report_files[under_name]).get_fdata()
+            under_img = under_img[:, :, zlims[0]:zlims[1]]
+        else:
+            under_img = []
+
+        png_fname = self._gen_fig_fname(img_name)
+        hw_ratio = graphics.image_montage(
+            slab_img, under_img, png_fname, dims=mont_rows_cols,
+            cmap_name=colormap, scaling=scaling
+        )
+
+        self._section_title(title, subsection=True)
+
+        montage_img = Image(png_fname, fig_width * inch, fig_width * hw_ratio * inch, hAlign='LEFT')
+
+        self._contents.append(montage_img)
+        self._contents.append(Spacer(1, 0.2 * inch))
 
     def _gen_fig_fname(self, suffix):
+
         return op.join(self._report_dir, f'{self._prefix}_{suffix}.png')
+
+    def _section_title(self, section_title, subsection=False, page_break=False):
+
+        # Optional page break
+        if page_break:
+            self._contents.append(PageBreak())
+
+        # Smaller font and post title gap for subsection titles
+        if subsection:
+            fontsize = 11
+            postgap = 0.1
+        else:
+            fontsize = 14
+            postgap = 0.4
+
+        ptext = f'<font size={fontsize}><b>{section_title}</b></font>'
+
+        self._contents.append(Paragraph(ptext, self._pstyles['Justify']))
+        self._contents.append(Spacer(1, postgap * inch))

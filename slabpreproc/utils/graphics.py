@@ -31,6 +31,7 @@ SOFTWARE.
 
 import numpy as np
 import matplotlib.pyplot as plt
+import nibabel as nib
 
 from scipy.signal import periodogram
 from skimage.util import montage
@@ -283,19 +284,21 @@ def orthoslice_montage(img_nii, montage_fname, cmap='viridis', irng='default'):
     plt.close()
 
 
-def image_montage(img3d, montage_fname, dims=(4, 6), cmap='magma', irng='default', axis=2):
+def image_montage(img3d, under3d, montage_fname, dims=(4, 6), cmap_name='magma', scaling='default', axis=2):
     """
     Create a montage over an axis of the signal-containing region of a 3D image volume
 
     :param img3d: numpy array
-        3D scalar image volume with possible empty regions
+        3D scalar slab image volume
+    :param under3d: numpy array
+        Option 3D image underlay with identical space and size to img3d
     :param montage_fname: str, pathlike
         Output filename for image montage PNG
     :param dims: tuple
         Montage dimensions (rows, columns)
-    :param cmap:
-        Colormap to use for montage
-    :param irng: str or tuple
+    :param cmap_name: str
+        Colormap name (see matplotlib docs) to use for overlay image
+    :param scaling: str or tuple
         Intensity range to use for montage. See skimage.exposure.rescale_intensity
     :param axis:
         Axis perpendicular to montage subimage plane
@@ -306,47 +309,72 @@ def image_montage(img3d, montage_fname, dims=(4, 6), cmap='magma', irng='default
     # Montage dimensions
     n_rows, n_cols = dims
 
-    # Crop image to minimum non-zero bounding box
-    # Removes empty slices outside of imaged slab embedded in larger volume
-    img3d_crop = min_nonzero_crop(img3d)
+    # If not underlay image provided, set to zeros
+    if len(under3d) < 1:
+        underlay = False
+        under3d = np.zeros_like(img3d)
+    else:
+        underlay = True
 
     # Downsample to 4x6 = 24 images in specified axis
-    nn = img3d_crop.shape[axis]
+    nn = img3d.shape[axis]
     inds = np.linspace(0, nn - 1, n_rows * n_cols).astype(int)
 
     # Downsample and reorder axis to place downsampled axis first
     if axis == 0:
-        img3d_dwn = img3d_crop[inds, ...]
+        img3d_dwn = img3d[inds, ...]
+        under3d_dwn = under3d[inds, ...]
     elif axis == 1:
-        img3d_dwn = img3d_crop[:, inds, :].transpose([1, 0, 2])
+        img3d_dwn = img3d[:, inds, :].transpose([1, 0, 2])
+        under3d_dwn = under3d[:, inds, :].transpose([1, 0, 2])
     else:
-        img3d_dwn = img3d_crop[..., inds].transpose([2, 1, 0])
+        img3d_dwn = img3d[..., inds].transpose([2, 1, 0])
         img3d_dwn = np.flip(img3d_dwn, axis=1)
+        under3d_dwn = under3d[..., inds].transpose([2, 1, 0])
+        under3d_dwn = np.flip(under3d_dwn, axis=1)
 
     # Construct 3x3 montage of slices
-    m2d = montage(img3d_dwn, fill='mean', grid_shape=(n_rows, n_cols))
+    img_mont = montage(img3d_dwn, fill='mean', grid_shape=(n_rows, n_cols))
+    under_mont = montage(under3d_dwn, fill='mean', grid_shape=(n_rows, n_cols))
 
-    # Intensity scaling
-    if 'robust' in irng:
-        vmin, vmax = np.percentile(m2d, (10, 98))
+    # Intensity scaling of foreground image
+    if 'robust' in scaling:
+        img_vmin, img_vmax = np.percentile(img_mont, (10, 98))
     else:
-        vmin, vmax = m2d.min(), m2d.max()
+        img_vmin, img_vmax = img_mont.min(), img_mont.max()
 
     # Calculate aspect ratio (w/h) for figure generation
-    hw_ratio = m2d.shape[0] / m2d.shape[1]
+    hw_ratio = img_mont.shape[0] / img_mont.shape[1]
 
     fig, axs = plt.subplots(1, 1, figsize=(12, 12 * hw_ratio))
 
-    mm = axs.imshow(
-        m2d,
-        cmap=plt.get_cmap(cmap),
+    # Initialize overlay colormap
+    over_cmap = plt.get_cmap(cmap_name)
+    over_cmap._init()
+
+    # Plot underlay first if required
+    if underlay:
+
+        under_plot = axs.imshow(
+            under_mont,
+            cmap=plt.get_cmap('gray'),
+            aspect='equal'
+        )
+
+        # Set zero intensity to transparent (alpha channel = 0.0)
+        over_cmap._lut[0, -1] = 0.0
+
+    # Overlay second with intensity zero set to transparent
+    over_plot = axs.imshow(
+        img_mont,
+        cmap=over_cmap,
         aspect='equal',
-        vmin=vmin,
-        vmax=vmax
+        vmin=img_vmin,
+        vmax=img_vmax
     )
 
     # Add a colorbar
-    plt.colorbar(mm, ax=axs, fraction=0.05, pad=0.02)
+    plt.colorbar(over_plot, ax=axs, fraction=0.05, pad=0.02)
 
     # Tidy up axes
     plt.axis('off')
@@ -361,16 +389,23 @@ def image_montage(img3d, montage_fname, dims=(4, 6), cmap='magma', irng='default
     return hw_ratio
 
 
-def min_nonzero_crop(a):
+def crop_to_slab(img_fname):
     """
+    Crop volume to presumptive slab embedded within larger volume
+    Project signal intensity onto axis 2, threshold and find bounding box, then crop
 
     :param a: numpy array
         3D image of slab embedded in a larger zero-filled volume
     :return a_crop: numpy array
-        3D image of minimum non-zero bounding box
+        3D image containing slab signal
     """
 
-    b = np.argwhere(a)
-    (x0, y0, z0), (x1, y1, z1) = b.min(0), b.max(0) + 1
-    return a[x0:x1, y0:y1, z0:z1]
+    img_nii = nib.load(img_fname)
+    img = img_nii.get_fdata()
+
+    proj = np.mean(np.mean(img, axis=1), axis=0)
+    proj_mask = proj > (np.max(proj) * 0.5)
+    in_mask = np.argwhere(proj_mask)
+
+    return in_mask.min(), in_mask.max() + 1
 

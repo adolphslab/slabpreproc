@@ -48,6 +48,24 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
+    t1head = File(
+        desc='Individual T1w template head',
+        exists=True,
+        mandatory=True
+    )
+
+    t2head = File(
+        desc='Individual T2w template head',
+        exists=True,
+        mandatory=True
+    )
+
+    labels = File(
+        desc='Template atlas labels',
+        exists=True,
+        mandatory=True
+    )
+
     mseepi = File(
         desc='Mean SEEPI image file',
         exists=True,
@@ -72,6 +90,12 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
+    b0_rads = File(
+        desc='TOPUP estimated B0 fieldmap in rad/s',
+        exists=True,
+        mandatory=True
+    )
+
     motion_csv = File(
         desc='Motion parameter CSV table',
         exists=True,
@@ -89,10 +113,14 @@ class SummaryReport(BaseInterface):
         # Construct dictionary of required files to pass to ReportPDF
         report_files = {
             'SourceBOLD': self.inputs.source_bold,
+            'T1Head': self.inputs.t1head,
+            'T2Head': self.inputs.t2head,
+            'Labels': self.inputs.labels,
             'mSEEPI': self.inputs.mseepi,
             'tMean': self.inputs.tmean,
             'tSFNR': self.inputs.tsfnr,
             'Dropout': self.inputs.dropout,
+            'B0rads': self.inputs.b0_rads,
             'MotionTable': self.inputs.motion_csv,
         }
 

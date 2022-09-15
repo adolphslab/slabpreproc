@@ -59,11 +59,17 @@ def build_toplevel_wf(work_dir, deriv_dir):
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
-                'bold', 'bold_meta',
-                'sbref', 'sbref_meta',
-                'seepis', 'seepis_meta',
-                'tpl_t1_head', 'tpl_t2_head',
-                'tpl_pseg', 'tpl_dseg', 'tpl_bmask'
+                'bold',
+                'bold_meta',
+                'sbref',
+                'sbref_meta',
+                'seepis',
+                'seepis_meta',
+                'tpl_t1_head',
+                'tpl_t2_head',
+                'tpl_pseg',
+                'tpl_dseg',
+                'tpl_bmask'
             ]
         ),
         name='inputs'
@@ -115,11 +121,16 @@ def build_toplevel_wf(work_dir, deriv_dir):
         # Connect QC workflow
         (inputs, qc_wf, [
             ('bold_meta', 'inputs.bold_meta'),
-            ('tpl_dseg', 'inputs.tpl_dseg')
+            ('tpl_dseg', 'inputs.tpl_dseg'),
+            ('tpl_bmask', 'inputs.tpl_bmask'),
         ]),
-        (func_preproc_wf, qc_wf, [('outputs.moco_pars', 'inputs.moco_pars')]),
+        (func_preproc_wf, qc_wf, [
+            ('outputs.moco_pars', 'inputs.moco_pars'),
+        ]),
         (template_reg_wf, qc_wf, [
             ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
+            ('outputs.tpl_sbref_preproc', 'inputs.tpl_bold_sbref'),
+            ('outputs.tpl_seepi_unwarp_mean', 'inputs.tpl_mean_seepi'),
             ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
         ]),
 
@@ -140,7 +151,7 @@ def build_toplevel_wf(work_dir, deriv_dir):
             ('outputs.tpl_bold_tsd', 'inputs.tpl_bold_tsd'),
             ('outputs.tpl_bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
             ('outputs.tpl_bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats'),
-            ('outputs.tpl_sigloss', 'inputs.tpl_sigloss'),
+            ('outputs.tpl_dropout', 'inputs.tpl_dropout'),
             ('outputs.motion_csv', 'inputs.motion_csv')
         ]),
 
@@ -156,16 +167,20 @@ def build_toplevel_wf(work_dir, deriv_dir):
         # Summary report
         (inputs, summary_report, [
             ('bold', 'source_bold'),
-            ('bold_meta', 'source_bold_meta')
+            ('bold_meta', 'source_bold_meta'),
+            ('tpl_t1_head', 't1head'),
+            ('tpl_t2_head', 't2head'),
+            ('tpl_dseg', 'labels'),
         ]),
         (template_reg_wf, summary_report, [
-            ('outputs.tpl_seepi_unwarp_mean', 'mseepi')
+            ('outputs.tpl_seepi_unwarp_mean', 'mseepi'),
+            ('outputs.tpl_b0_rads', 'b0_rads')
         ]),
         (qc_wf, summary_report, [
             ('outputs.tpl_bold_tmean', 'tmean'),
             ('outputs.tpl_bold_tsfnr', 'tsfnr'),
-            ('outputs.tpl_sigloss', 'dropout'),
-            ('outputs.motion_csv', 'motion_csv')
+            ('outputs.tpl_dropout', 'dropout'),
+            ('outputs.motion_csv', 'motion_csv'),
         ])
     ])
 

@@ -15,6 +15,7 @@ import nipype.algorithms.confounds as confounds
 import nipype.pipeline.engine as pe
 
 from ..interfaces.motion import Motion
+from ..interfaces.dropout import Dropout
 
 
 def build_qc_wf():
@@ -24,8 +25,11 @@ def build_qc_wf():
         util.IdentityInterface(
             fields=[
                 'tpl_bold_preproc',
-                'tpl_dseg',
+                'tpl_bold_sbref',
+                'tpl_mean_seepi',
+                'tpl_bmask',
                 'tpl_b0_rads',
+                'tpl_dseg',
                 'moco_pars',
                 'bold_meta'
             ]
@@ -67,13 +71,10 @@ def build_qc_wf():
         name='bold_tsfnr_roistats'
     )
 
-    # Estimate EPI dropout from template aligned TOPUP B0 map
-    est_sigloss = pe.Node(
-        fsl.SigLoss(
-            echo_time=0.03,
-            slice_direction='z'
-        ),
-        name='est_sigloss'
+    # Estimate EPI dropout from template aligned SBRef and mean SE-EPI image
+    est_dropout = pe.Node(
+        Dropout(),
+        name='est_dropout'
     )
 
     # Define outputs from QC workflow
@@ -84,7 +85,7 @@ def build_qc_wf():
                 'tpl_bold_tsd',
                 'tpl_bold_tsfnr',
                 'tpl_bold_tsfnr_roistats',
-                'tpl_sigloss',
+                'tpl_dropout',
                 'motion_csv'
             ]
         ),
@@ -101,8 +102,12 @@ def build_qc_wf():
         (bold_tsfnr, bold_tsfnr_roistats, [('tsnr_file', 'in_file')]),
         (inputs, bold_tsfnr_roistats, [('tpl_dseg', 'mask')]),
 
-        # Sigloss from TOPUP B0 field in rad/s
-        (inputs, est_sigloss, [('tpl_b0_rads', 'in_file')]),
+        # Estimated region dropout from SBRef and mean SE-EPI
+        (inputs, est_dropout, [
+            ('tpl_bold_sbref', 'sbref'),
+            ('tpl_mean_seepi', 'mseepi'),
+            ('tpl_bmask', 'bmask')
+        ]),
 
         # Calculate FD and LPF FD from FSL motion parameters
         (inputs, calc_fd, [('moco_pars', 'in_file')]),
@@ -110,13 +115,12 @@ def build_qc_wf():
         (calc_fd, build_motion_table, [('out_file', 'fd_pars')]),
         (inputs, build_motion_table, [('bold_meta', 'bold_meta')]),
 
-
         # Return all stats images
         (bold_tsfnr, outputs, [('mean_file', 'tpl_bold_tmean')]),
         (bold_tsfnr, outputs, [('stddev_file', 'tpl_bold_tsd')]),
         (bold_tsfnr, outputs, [('tsnr_file', 'tpl_bold_tsfnr')]),
         (bold_tsfnr_roistats, outputs, [('out_file', 'tpl_bold_tsfnr_roistats')]),
-        (est_sigloss, outputs, [('out_file', 'tpl_sigloss')]),
+        (est_dropout, outputs, [('dropout', 'tpl_dropout')]),
         (build_motion_table, outputs, [('motion_csv', 'motion_csv')])
     ])
 
