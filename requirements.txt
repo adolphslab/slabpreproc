@@ -1,9 +1,10 @@
-setuptools~=63.1.0
+setuptools~=65.3.0
 numpy~=1.23.1
-scipy~=1.8.1
+scipy~=1.9.1
 scikit-image~=0.19.3
 pandas~=1.4.3
 nibabel~=4.0.1
-reportlab~=3.5.68
+reportlab~=3.6.11
 nipype~=1.8.3
 templateflow~=0.8.1
+matplotlib~=3.6.0

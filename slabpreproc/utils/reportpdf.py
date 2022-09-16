@@ -60,7 +60,7 @@ from ..utils import graphics
 
 class ReportPDF:
 
-    def __init__(self, report_dir, report_files, metadata):
+    def __init__(self, report_dir, report_files, metadata, iscomplex):
         """
 
         :param report_dir: str, directory
@@ -75,6 +75,7 @@ class ReportPDF:
         self._deriv_dir = op.dirname(report_dir)
         self._report_files = report_files
         self._metadata = metadata
+        self._iscomplex = iscomplex
 
         # Create report dir for this subject/session if needed
         if not op.isdir(report_dir):

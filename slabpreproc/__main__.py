@@ -58,6 +58,7 @@ def main():
     parser.add_argument('-w', '--workdir', help='Work directory')
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
+    parser.add_argument('--complex', action='store_true', default=False, help="Complex-valued BOLD")
     parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
 
     # Parse command line arguments
@@ -103,6 +104,7 @@ def main():
     print(f'Work directory : {work_dir}')
     print(f'Subject ID     : {subj_id}')
     print(f'Session ID     : {sess_id}')
+    print(f'Complex BOLD   : {args.complex}')
     print(f'Debug mode     : {args.debug}')
 
     # Get T1 and T2 templates and subcortical labels from templateflow repo
@@ -152,35 +154,53 @@ def main():
     layout = gen_bids_layout(bids_dir)
 
     # Get available image lists for this subject and session
-    filter = {
+    mag_filter = {
         'datatype': 'func',
         'suffix': 'bold',
         'part': 'mag',
         'extension': ['.nii', '.nii.gz']
     }
-    bold_list = layout.get(subject=subj_id, session=sess_id, **filter)
-    assert len(bold_list) > 0, 'No BOLD EPI series found'
+
+    bold_mag_list = layout.get(subject=subj_id, session=sess_id, **mag_filter)
+    assert len(bold_mag_list) > 0, 'No BOLD EPI magnitude images found'
 
     #
-    # BOLD series loop
+    # BOLD magnitude images loop
     #
 
-    for bold in bold_list:
+    for bold_mag in bold_mag_list:
 
         # Get BOLD series metadata
-        bold_path = bold.path
-        bold_meta = bold.get_metadata()
+        bold_mag_path = bold_mag.path
+        bold_mag_meta = bold_mag.get_metadata()
 
         # Parse filename keys
-        keys = bids.layout.parse_file_entities(bold)
+        keys = bids.layout.parse_file_entities(bold_mag)
+
+        if args.complex:
+
+            filter = {
+                'datatype': 'func',
+                'suffix': 'bold',
+                'part': 'phase',
+                'extension': ['.nii', '.nii.gz'],
+                'task': keys['task']
+            }
+            bold_phase = layout.get(subject=subj_id, session=sess_id, **filter)
+            assert len(bold_phase) > 0, print('No phase images found for this BOLD series')
+            bold_phase_path = bold_phase[0].path
+
+        else:
+
+            bold_phase_path = []
 
         # Separate work folder for each BOLD image
-        bold_stub = op.basename(bold).split(".nii")[0]
+        bold_stub = op.basename(bold_mag).split(".nii")[0]
         this_work_dir = work_dir / bold_stub
         os.makedirs(this_work_dir, exist_ok=True)
 
         #
-        # Find SBRef for this BOLD series
+        # Find SBRef for this BOLD magnitude image
         #
 
         filter = {
@@ -191,7 +211,6 @@ def main():
             'task': keys['task']
         }
         sbref = layout.get(subject=subj_id, session=sess_id, **filter)
-
         assert len(sbref) > 0, print('No SBRef found for this BOLD series')
 
         # SBRef metadata (should only be one)
@@ -215,11 +234,12 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir)
+        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, args.complex)
 
         # Supply input images
-        toplevel_wf.inputs.inputs.bold = bold_path
-        toplevel_wf.inputs.inputs.bold_meta = bold_meta
+        toplevel_wf.inputs.inputs.bold_mag = bold_mag_path
+        toplevel_wf.inputs.inputs.bold_phase = bold_phase_path
+        toplevel_wf.inputs.inputs.bold_mag_meta = bold_mag_meta
         toplevel_wf.inputs.inputs.sbref = sbref_path
         toplevel_wf.inputs.inputs.sbref_meta = sbref_meta
         toplevel_wf.inputs.inputs.seepis = fmap_paths

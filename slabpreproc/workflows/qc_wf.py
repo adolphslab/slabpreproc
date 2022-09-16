@@ -18,7 +18,7 @@ from ..interfaces.motion import Motion
 from ..interfaces.dropout import Dropout
 
 
-def build_qc_wf():
+def build_qc_wf(iscomplex=False):
 
     # QC inputs
     inputs = pe.Node(

@@ -15,7 +15,6 @@ from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     Directory,
     File,
-    TraitedSpec,
     traits
 )
 from ..utils import ReportPDF
@@ -33,6 +32,11 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
     deriv_dir = Directory(
         desc='BIDS derivative directory for slabpreproc',
         exists=True,
+        mandatory=True
+    )
+
+    iscomplex = traits.Bool(
+        desc='Complex-valued preprocessing flag',
         mandatory=True
     )
 
@@ -128,7 +132,8 @@ class SummaryReport(BaseInterface):
         ReportPDF(
             self._gen_report_dname(),
             report_files,
-            self.inputs.source_bold_meta
+            self.inputs.source_bold_meta,
+            self.inputs.iscomplex
         )
 
         return runtime

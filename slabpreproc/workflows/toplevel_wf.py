@@ -44,7 +44,7 @@ import nipype.pipeline.engine as pe
 # config.enable_debug_mode()
 
 
-def build_toplevel_wf(work_dir, deriv_dir):
+def build_toplevel_wf(work_dir, deriv_dir, iscomplex=False):
     """
     Build main subcortical QC workflow
 
@@ -52,6 +52,8 @@ def build_toplevel_wf(work_dir, deriv_dir):
         Path to working directory
     :param deriv_dir: str
         Path to derivatives directory
+    :param iscomplex: bool
+        Complex preprocessing flag
     :return:
     """
 
@@ -59,31 +61,25 @@ def build_toplevel_wf(work_dir, deriv_dir):
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
-                'bold',
-                'bold_meta',
-                'sbref',
-                'sbref_meta',
-                'seepis',
-                'seepis_meta',
-                'tpl_t1_head',
-                'tpl_t2_head',
-                'tpl_pseg',
-                'tpl_dseg',
-                'tpl_bmask'
+                'bold_mag', 'bold_phase', 'bold_mag_meta',
+                'sbref', 'sbref_meta',
+                'seepis', 'seepis_meta',
+                'tpl_t1_head', 'tpl_t2_head',
+                'tpl_pseg', 'tpl_dseg', 'tpl_bmask'
             ]
         ),
         name='inputs'
     )
 
     # Sub-workflows setup
-    func_preproc_wf = build_func_preproc_wf()
-    template_reg_wf = build_template_reg_wf()
-    qc_wf = build_qc_wf()
-    derivatives_wf = build_derivatives_wf(deriv_dir)
+    func_preproc_wf = build_func_preproc_wf(iscomplex)
+    template_reg_wf = build_template_reg_wf(iscomplex)
+    qc_wf = build_qc_wf(iscomplex)
+    derivatives_wf = build_derivatives_wf(deriv_dir, iscomplex)
 
     # Summary report node
     summary_report = pe.Node(
-        SummaryReport(deriv_dir=deriv_dir),
+        SummaryReport(deriv_dir=deriv_dir, iscomplex=iscomplex),
         overwrite=True,  # Always regenerate report
         name='summary_report'
     )
@@ -98,48 +94,47 @@ def build_toplevel_wf(work_dir, deriv_dir):
 
         # Func preproc inputs
         (inputs, func_preproc_wf, [
-            ('bold', 'inputs.bold'),
+            ('bold_mag', 'inputs.bold_mag'),
+            ('bold_phase', 'inputs.bold_phase'),
+            ('bold_mag_meta', 'inputs.bold_mag_meta'),
             ('sbref', 'inputs.sbref'),
-            ('seepis', 'inputs.seepis'),
-            ('bold_meta', 'inputs.bold_meta'),
             ('sbref_meta', 'inputs.sbref_meta'),
+            ('seepis', 'inputs.seepis'),
             ('seepis_meta', 'inputs.seepis_meta')
         ]),
 
         # Pass T2w individual template to registration workflow
         (inputs, template_reg_wf, [('tpl_t2_head', 'inputs.tpl_t2_head')]),
 
-        # Pass preprocessed (motion and distortion corrected) BOLD and SBRef
+        # Pass preprocessed (motion and distortion corrected) BOLD and SBRef images
         # to template registration workflow
         (func_preproc_wf, template_reg_wf, [
             ('outputs.sbref_preproc', 'inputs.sbref_preproc'),
-            ('outputs.bold_preproc', 'inputs.bold_preproc'),
+            ('outputs.bold_mag_preproc', 'inputs.bold_mag_preproc'),
+            ('outputs.bold_phase_preproc', 'inputs.bold_phase_preproc'),
             ('outputs.seepi_unwarp_mean', 'inputs.seepi_unwarp_mean'),
             ('outputs.topup_b0_rads', 'inputs.topup_b0_rads')
         ]),
 
         # Connect QC workflow
         (inputs, qc_wf, [
-            ('bold_meta', 'inputs.bold_meta'),
-            ('tpl_dseg', 'inputs.tpl_dseg'),
-            ('tpl_bmask', 'inputs.tpl_bmask'),
+            ('bold_mag_meta', 'inputs.bold_mag_meta'),
+            ('tpl_dseg', 'inputs.tpl_dseg')
         ]),
-        (func_preproc_wf, qc_wf, [
-            ('outputs.moco_pars', 'inputs.moco_pars'),
-        ]),
+        (func_preproc_wf, qc_wf, [('outputs.moco_pars', 'inputs.moco_pars')]),
         (template_reg_wf, qc_wf, [
-            ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
-            ('outputs.tpl_sbref_preproc', 'inputs.tpl_bold_sbref'),
-            ('outputs.tpl_seepi_unwarp_mean', 'inputs.tpl_mean_seepi'),
+            ('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc'),
             ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
         ]),
 
         # Connect derivatives outputs
-        (inputs, derivatives_wf, [('bold', 'inputs.source_file')]),
+        (inputs, derivatives_wf, [
+            ('bold_mag', 'inputs.source_file'),
+        ]),
 
         # Write individual template-space results to derivatives folder
         (template_reg_wf, derivatives_wf, [
-            ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
+            ('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc'),
             ('outputs.tpl_sbref_preproc', 'inputs.tpl_sbref_preproc'),
             ('outputs.tpl_seepi_unwarp_mean', 'inputs.tpl_seepi_unwarp_mean'),
             ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
@@ -151,7 +146,7 @@ def build_toplevel_wf(work_dir, deriv_dir):
             ('outputs.tpl_bold_tsd', 'inputs.tpl_bold_tsd'),
             ('outputs.tpl_bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
             ('outputs.tpl_bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats'),
-            ('outputs.tpl_dropout', 'inputs.tpl_dropout'),
+            ('outputs.tpl_sigloss', 'inputs.tpl_sigloss'),
             ('outputs.motion_csv', 'inputs.motion_csv')
         ]),
 
@@ -167,20 +162,16 @@ def build_toplevel_wf(work_dir, deriv_dir):
         # Summary report
         (inputs, summary_report, [
             ('bold', 'source_bold'),
-            ('bold_meta', 'source_bold_meta'),
-            ('tpl_t1_head', 't1head'),
-            ('tpl_t2_head', 't2head'),
-            ('tpl_dseg', 'labels'),
+            ('bold_meta', 'source_bold_meta')
         ]),
         (template_reg_wf, summary_report, [
-            ('outputs.tpl_seepi_unwarp_mean', 'mseepi'),
-            ('outputs.tpl_b0_rads', 'b0_rads')
+            ('outputs.tpl_seepi_unwarp_mean', 'mseepi')
         ]),
         (qc_wf, summary_report, [
             ('outputs.tpl_bold_tmean', 'tmean'),
             ('outputs.tpl_bold_tsfnr', 'tsfnr'),
-            ('outputs.tpl_dropout', 'dropout'),
-            ('outputs.motion_csv', 'motion_csv'),
+            ('outputs.tpl_sigloss', 'dropout'),
+            ('outputs.motion_csv', 'motion_csv')
         ])
     ])
 
