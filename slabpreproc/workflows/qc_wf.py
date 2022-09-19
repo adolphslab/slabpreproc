@@ -24,14 +24,14 @@ def build_qc_wf(iscomplex=False):
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
-                'tpl_bold_preproc',
+                'tpl_bold_mag_preproc',
                 'tpl_bold_sbref',
                 'tpl_mean_seepi',
                 'tpl_bmask',
                 'tpl_b0_rads',
                 'tpl_dseg',
                 'moco_pars',
-                'bold_meta'
+                'bold_mag_meta'
             ]
         ),
         name='inputs'
@@ -96,7 +96,7 @@ def build_qc_wf(iscomplex=False):
     qc_wf = pe.Workflow(name='qc_wf')
 
     qc_wf.connect([
-        (inputs, bold_tsfnr, [('tpl_bold_preproc', 'in_file')]),
+        (inputs, bold_tsfnr, [('tpl_bold_mag_preproc', 'in_file')]),
 
         # Pass tSFNR and labels to ROI stats
         (bold_tsfnr, bold_tsfnr_roistats, [('tsnr_file', 'in_file')]),
@@ -113,7 +113,7 @@ def build_qc_wf(iscomplex=False):
         (inputs, calc_fd, [('moco_pars', 'in_file')]),
         (inputs, build_motion_table, [('moco_pars', 'moco_pars')]),
         (calc_fd, build_motion_table, [('out_file', 'fd_pars')]),
-        (inputs, build_motion_table, [('bold_meta', 'bold_meta')]),
+        (inputs, build_motion_table, [('bold_mag_meta', 'bold_mag_meta')]),
 
         # Return all stats images
         (bold_tsfnr, outputs, [('mean_file', 'tpl_bold_tmean')]),

@@ -18,7 +18,8 @@ def build_template_reg_wf(n_threads=2):
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
-                'bold_preproc',
+                'bold_mag_preproc',
+                'bold_phase_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
                 'tpl_t2_head',
@@ -97,7 +98,7 @@ def build_template_reg_wf(n_threads=2):
     outputs = pe.Node(
         util.IdentityInterface(
             fields=[
-                'tpl_bold_preproc',
+                'tpl_bold_mag_preproc',
                 'tpl_sbref_preproc',
                 'tpl_seepi_unwarp_mean',
                 'tpl_b0_rads'
@@ -140,13 +141,13 @@ def build_template_reg_wf(n_threads=2):
         (fsl2itk, resamp_b0_tpl, [('itk_transform', 'transforms')]),
 
         # Resample unwarped BOLD to template space
-        (inputs, resamp_bold_tpl, [('bold_preproc', 'input_image')]),
+        (inputs, resamp_bold_tpl, [('bold_mag_preproc', 'input_image')]),
         (inputs, resamp_bold_tpl, [('tpl_t2_head', 'reference_image')]),
         (fsl2itk, resamp_bold_tpl, [('itk_transform', 'transforms')]),
 
         # Output results
         (resamp_seepi_tpl, outputs, [('output_image', 'tpl_seepi_unwarp_mean')]),
-        (resamp_bold_tpl, outputs, [('output_image', 'tpl_bold_preproc')]),
+        (resamp_bold_tpl, outputs, [('output_image', 'tpl_bold_mag_preproc')]),
         (resamp_sbref_tpl, outputs, [('output_image', 'tpl_sbref_preproc')]),
         (resamp_b0_tpl, outputs, [('output_image', 'tpl_b0_rads')]),
 

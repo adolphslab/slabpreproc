@@ -27,7 +27,7 @@ def build_derivatives_wf(deriv_dir, iscomplex=False):
         util.IdentityInterface(
             fields=[
                 'source_file',
-                'tpl_bold_preproc',
+                'tpl_bold_mag_preproc',
                 'tpl_sbref_preproc',
                 'tpl_seepi_unwarp_mean',
                 'tpl_bold_tmean',
@@ -91,7 +91,7 @@ def build_derivatives_wf(deriv_dir, iscomplex=False):
 
         # Create file list
         (inputs, deriv_list, [
-            ('tpl_bold_preproc', 'in1'),
+            ('tpl_bold_mag_preproc', 'in1'),
             ('tpl_sbref_preproc', 'in2'),
             ('tpl_seepi_unwarp_mean', 'in3'),
             ('tpl_bold_tmean', 'in4'),

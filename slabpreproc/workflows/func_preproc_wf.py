@@ -22,9 +22,13 @@ def build_func_preproc_wf(n_threads=2):
     inputs = pe.Node(
         util.IdentityInterface(
             fields=(
-                'bold', 'bold_meta',
-                'sbref', 'sbref_meta',
-                'seepis', 'seepis_meta')
+                'bold_mag',
+                'bold_phase',
+                'bold_mag_meta',
+                'sbref',
+                'sbref_meta',
+                'seepis',
+                'seepis_meta')
         ),
         name='inputs'
     )
@@ -130,7 +134,8 @@ def build_func_preproc_wf(n_threads=2):
     outputs = pe.Node(
         util.IdentityInterface(
             fields=(
-                'bold_preproc',
+                'bold_mag_preproc',
+                'bold_phase_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
                 'moco_pars',
@@ -160,7 +165,7 @@ def build_func_preproc_wf(n_threads=2):
         (get_seepi_ref, sbref2seepi, [('seepi_ref', 'fixed_image')]),
 
         # Motion correct BOLD series to the fmap-aligned SBRef image
-        (inputs, mcflirt, [('bold', 'in_file')]),
+        (inputs, mcflirt, [('bold_mag', 'in_file')]),
         (sbref2seepi, mcflirt, [('warped_image', 'ref_file')]),
 
         # Create TOPUP encoding files
@@ -198,7 +203,7 @@ def build_func_preproc_wf(n_threads=2):
         (topup_est, hz2rads, [('out_field', 'in_file')]),
 
         # Output results
-        (unwarp_bold, outputs, [('out_corrected', 'bold_preproc')]),
+        (unwarp_bold, outputs, [('out_corrected', 'bold_mag_preproc')]),
         (unwarp_sbref, outputs, [('out_corrected', 'sbref_preproc')]),
         (seepi_unwarp_mean, outputs, [('out_file', 'seepi_unwarp_mean')]),
         (hz2rads, outputs, [('out_file', 'topup_b0_rads')]),
