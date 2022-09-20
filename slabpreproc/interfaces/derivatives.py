@@ -18,8 +18,6 @@ from nipype.interfaces.base import (
     traits,
     File,
     Directory,
-    Str,
-    Undefined,
     InputMultiPath,
     InputMultiObject,
     TraitedSpec
@@ -108,6 +106,8 @@ class DerivativesSorter(BaseInterface):
 
             if 'Text' in sort_dict['FileType']:
                 out_pname = out_pstub + '.txt'
+            elif 'CSV' in sort_dict['FileType']:
+                out_pname = out_pstub + '.csv'
             else:
                 out_pname = out_pstub + old_ext
 

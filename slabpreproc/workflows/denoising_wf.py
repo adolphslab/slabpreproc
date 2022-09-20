@@ -6,7 +6,7 @@ import nipype.interfaces.fsl as fsl
 import nipype.pipeline.engine as pe
 
 
-def build_melodic_wf():
+def build_denoising_wf():
 
     melodic_wf = pe.Workflow(name='melodic_wf')
 

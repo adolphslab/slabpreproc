@@ -45,7 +45,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='2022.9.1',  # Required
+    version='2022.9.20-dev',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
@@ -148,7 +148,8 @@ setup(
         'nipype',
         'pybids',
         'niworkflows',
-        'templateflow'
+        'templateflow',
+        'reportlab'
     ],  # Optional
 
     # List additional groups of dependencies here (e.g. development

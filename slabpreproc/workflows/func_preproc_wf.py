@@ -3,6 +3,7 @@
 Functional MRI preprocessing workflow
 """
 
+import numpy as np
 import nipype.interfaces.utility as util
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.ants as ants
@@ -15,15 +16,27 @@ from ..interfaces import SEEPIRef
 # from niworkflows.interfaces.itk import MCFLIRT2ITK
 
 
-def build_func_preproc_wf():
+def build_func_preproc_wf(iscomplex=False, nthreads=2):
+    """
+
+    :param iscomplex: bool
+        Complex-valued preprocessing flag
+    :param nthreads: int
+        Maximum number of threads allowed
+    :return:
+    """
 
     # Preproc inputs
     inputs = pe.Node(
         util.IdentityInterface(
             fields=(
-                'bold', 'bold_meta',
-                'sbref', 'sbref_meta',
-                'seepis', 'seepis_meta')
+                'bold_mag',
+                'bold_phase',
+                'bold_mag_meta',
+                'sbref',
+                'sbref_meta',
+                'seepis',
+                'seepis_meta')
         ),
         name='inputs'
     )
@@ -36,7 +49,7 @@ def build_func_preproc_wf():
     sbref2seepi = pe.Node(
         ants.RegistrationSynQuick(
             transform_type='r',
-            num_threads=4
+            num_threads=nthreads
         ),
         name='sbref2seepi',
         terminal_output=None
@@ -50,6 +63,7 @@ def build_func_preproc_wf():
         fsl.MCFLIRT(
             cost='normcorr',
             dof=6,
+            save_mats=True,  # Save rigid transform matrices for single-shot, per-volume resampling
             save_plots=True
         ),
         name='mcflirt'
@@ -113,14 +127,28 @@ def build_func_preproc_wf():
         name='unwarp_sbref'
     )
 
+
+    # Derive signal dropout map from TOPUP B0 field estimate
+    # JMT Maybe replace this with template MEMPRAGE B0 map
+
+    hz2rads = pe.Node(
+        fsl.ImageMaths(
+            op_string=f'-mul {2.0 * np.pi}'
+        ),
+        name='hz2rads'
+    )
+
     # Define outputs for the fMRI preproc workflow
     outputs = pe.Node(
         util.IdentityInterface(
             fields=(
-                'bold_preproc',
+                'bold_mag_preproc',
+                'bold_phase_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
-                'moco_pars'),
+                'moco_pars',
+                'topup_b0_rads'
+            ),
         ),
         name='outputs'
     )
@@ -145,7 +173,7 @@ def build_func_preproc_wf():
         (get_seepi_ref, sbref2seepi, [('seepi_ref', 'fixed_image')]),
 
         # Motion correct BOLD series to the fmap-aligned SBRef image
-        (inputs, mcflirt, [('bold', 'in_file')]),
+        (inputs, mcflirt, [('bold_mag', 'in_file')]),
         (sbref2seepi, mcflirt, [('warped_image', 'ref_file')]),
 
         # Create TOPUP encoding files
@@ -179,10 +207,14 @@ def build_func_preproc_wf():
         (sbref_enc_file, unwarp_sbref, [('encoding_file', 'encoding_file')]),
         (inputs, unwarp_sbref, [('sbref', 'in_files')]),
 
+        # Rescale TOPUP B0 map from Hz to rad/s
+        (topup_est, hz2rads, [('out_field', 'in_file')]),
+
         # Output results
-        (unwarp_bold, outputs, [('out_corrected', 'bold_preproc')]),
+        (unwarp_bold, outputs, [('out_corrected', 'bold_mag_preproc')]),
         (unwarp_sbref, outputs, [('out_corrected', 'sbref_preproc')]),
         (seepi_unwarp_mean, outputs, [('out_file', 'seepi_unwarp_mean')]),
+        (hz2rads, outputs, [('out_file', 'topup_b0_rads')]),
         (mcflirt, outputs, [('par_file', 'moco_pars')]),
     ])
 

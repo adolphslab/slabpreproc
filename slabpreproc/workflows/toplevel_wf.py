@@ -29,11 +29,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import os
 
 from .qc_wf import build_qc_wf
 from .func_preproc_wf import build_func_preproc_wf
 from .template_reg_wf import build_template_reg_wf
 from .derivatives_wf import build_derivatives_wf
+from ..interfaces.summaryreport import SummaryReport
 
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
@@ -42,7 +44,7 @@ import nipype.pipeline.engine as pe
 # config.enable_debug_mode()
 
 
-def build_toplevel_wf(work_dir, deriv_dir, layout):
+def build_toplevel_wf(work_dir, deriv_dir, iscomplex=False, nthreads=2):
     """
     Build main subcortical QC workflow
 
@@ -50,8 +52,10 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
         Path to working directory
     :param deriv_dir: str
         Path to derivatives directory
-    :param layout: BIDSLayout
-        Prefilled layout for BIDS dataset
+    :param iscomplex: bool
+        Complex-valued preprocessing flag
+    :param nthreads: int
+        Maximum number of threads allowed
     :return:
     """
 
@@ -59,21 +63,35 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
-                'bold', 'bold_meta',
-                'sbref', 'sbref_meta',
-                'seepis', 'seepis_meta',
-                'tpl_t1_head', 'tpl_t2_head',
-                'tpl_pseg', 'tpl_dseg', 'tpl_bmask'
+                'bold_mag',
+                'bold_phase',
+                'bold_mag_meta',
+                'sbref',
+                'sbref_meta',
+                'seepis',
+                'seepis_meta',
+                'tpl_t1_head',
+                'tpl_t2_head',
+                'tpl_pseg',
+                'tpl_dseg',
+                'tpl_bmask'
             ]
         ),
         name='inputs'
     )
 
     # Sub-workflows setup
-    func_preproc_wf = build_func_preproc_wf()
-    template_reg_wf = build_template_reg_wf()
-    qc_wf = build_qc_wf()
-    derivatives_wf = build_derivatives_wf(deriv_dir)
+    func_preproc_wf = build_func_preproc_wf(iscomplex=iscomplex, nthreads=nthreads)
+    template_reg_wf = build_template_reg_wf(iscomplex=iscomplex, nthreads=nthreads)
+    qc_wf = build_qc_wf(iscomplex=iscomplex, nthreads=nthreads)
+    derivatives_wf = build_derivatives_wf(deriv_dir, iscomplex=iscomplex)
+
+    # Summary report node
+    summary_report = pe.Node(
+        SummaryReport(deriv_dir=deriv_dir, iscomplex=iscomplex),
+        overwrite=True,  # Always regenerate report
+        name='summary_report'
+    )
 
     # Workflow
     toplevel_wf = pe.Workflow(
@@ -85,47 +103,65 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
 
         # Func preproc inputs
         (inputs, func_preproc_wf, [
-            ('bold', 'inputs.bold'),
+            ('bold_mag', 'inputs.bold_mag'),
+            ('bold_phase', 'inputs.bold_phase'),
+            ('bold_mag_meta', 'inputs.bold_mag_meta'),
             ('sbref', 'inputs.sbref'),
-            ('seepis', 'inputs.seepis'),
-            ('bold_meta', 'inputs.bold_meta'),
             ('sbref_meta', 'inputs.sbref_meta'),
+            ('seepis', 'inputs.seepis'),
             ('seepis_meta', 'inputs.seepis_meta')
         ]),
 
         # Pass T2w individual template to registration workflow
         (inputs, template_reg_wf, [('tpl_t2_head', 'inputs.tpl_t2_head')]),
 
-        # Pass preprocessed (motion and distortion corrected) BOLD and SBRef
+        # Pass preprocessed (motion and distortion corrected) BOLD and SBRef images
         # to template registration workflow
         (func_preproc_wf, template_reg_wf, [
             ('outputs.sbref_preproc', 'inputs.sbref_preproc'),
-            ('outputs.bold_preproc', 'inputs.bold_preproc'),
-            ('outputs.seepi_unwarp_mean', 'inputs.seepi_unwarp_mean')
+            ('outputs.bold_mag_preproc', 'inputs.bold_mag_preproc'),
+            ('outputs.bold_phase_preproc', 'inputs.bold_phase_preproc'),
+            ('outputs.seepi_unwarp_mean', 'inputs.seepi_unwarp_mean'),
+            ('outputs.topup_b0_rads', 'inputs.topup_b0_rads')
         ]),
 
         # Connect QC workflow
-        (template_reg_wf, qc_wf, [('outputs.tpl_bold_preproc', 'inputs.bold')]),
-        (inputs, qc_wf, [('tpl_dseg', 'inputs.labels')]),
+        (inputs, qc_wf, [
+            ('bold_mag_meta', 'inputs.bold_mag_meta'),
+            ('tpl_dseg', 'inputs.tpl_dseg'),
+            ('tpl_bmask', 'inputs.tpl_bmask')
+        ]),
+        (func_preproc_wf, qc_wf, [
+            ('outputs.moco_pars', 'inputs.moco_pars')
+        ]),
+        (template_reg_wf, qc_wf, [
+            ('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc'),
+            ('outputs.tpl_seepi_unwarp_mean', 'inputs.tpl_mean_seepi'),
+            ('outputs.tpl_sbref_preproc', 'inputs.tpl_bold_sbref'),
+            ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
+        ]),
 
         # Connect derivatives outputs
-        (inputs, derivatives_wf, [('bold', 'inputs.source_file')]),
-        (func_preproc_wf, derivatives_wf, [('outputs.moco_pars', 'inputs.moco_pars')]),
+        (inputs, derivatives_wf, [
+            ('bold_mag', 'inputs.source_file'),
+        ]),
 
         # Write individual template-space results to derivatives folder
         (template_reg_wf, derivatives_wf, [
-            ('outputs.tpl_bold_preproc', 'inputs.tpl_bold_preproc'),
+            ('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc'),
             ('outputs.tpl_sbref_preproc', 'inputs.tpl_sbref_preproc'),
             ('outputs.tpl_seepi_unwarp_mean', 'inputs.tpl_seepi_unwarp_mean'),
+            ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
         ]),
 
         # Write QC results to derivatives folder
         (qc_wf, derivatives_wf, [
-            ('outputs.bold_tmean', 'inputs.tpl_bold_tmean'),
-            ('outputs.bold_tsd', 'inputs.tpl_bold_tsd'),
-            ('outputs.bold_detrended', 'inputs.tpl_bold_detrended'),
-            ('outputs.bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
-            ('outputs.bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats')
+            ('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean'),
+            ('outputs.tpl_bold_tsd', 'inputs.tpl_bold_tsd'),
+            ('outputs.tpl_bold_tsfnr', 'inputs.tpl_bold_tsfnr'),
+            ('outputs.tpl_bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats'),
+            ('outputs.tpl_dropout', 'inputs.tpl_dropout'),
+            ('outputs.motion_csv', 'inputs.motion_csv')
         ]),
 
         # Write atlas images and templates to derivatives folder
@@ -135,24 +171,46 @@ def build_toplevel_wf(work_dir, deriv_dir, layout):
             ('tpl_pseg', 'inputs.tpl_pseg'),
             ('tpl_dseg', 'inputs.tpl_dseg'),
             ('tpl_bmask', 'inputs.tpl_bmask')
+        ]),
+
+        # Summary report
+        (inputs, summary_report, [
+            ('bold_mag', 'source_bold'),
+            ('bold_mag_meta', 'source_bold_meta'),
+            ('tpl_t1_head', 't1head'),
+            ('tpl_t2_head', 't2head'),
+            ('tpl_dseg', 'labels'),
+        ]),
+        (template_reg_wf, summary_report, [
+            ('outputs.tpl_seepi_unwarp_mean', 'mseepi'),
+            ('outputs.tpl_b0_rads', 'b0_rads'),
+        ]),
+        (qc_wf, summary_report, [
+            ('outputs.tpl_bold_tmean', 'tmean'),
+            ('outputs.tpl_bold_tsfnr', 'tsfnr'),
+            ('outputs.tpl_dropout', 'dropout'),
+            ('outputs.motion_csv', 'motion_csv')
         ])
     ])
 
-    # Optional: plot main workflows to sandbox
+    # Optional: plot main workflows
+
+    graph_dir = "slabpreproc_graphs"
+    os.makedirs(graph_dir, exist_ok=True)
 
     func_preproc_wf.write_graph(
         graph2use='colored',
-        dotfilename='/Users/jmt/sandbox/func_preproc_wf.dot'
+        dotfilename=os.path.join(graph_dir, 'func_preproc_wf.dot')
     )
 
     template_reg_wf.write_graph(
         graph2use='colored',
-        dotfilename='/Users/jmt/sandbox/template_reg_wf.dot'
+        dotfilename=os.path.join(graph_dir, 'template_reg_wf.dot')
     )
 
     qc_wf.write_graph(
         graph2use='colored',
-        dotfilename='/Users/jmt/sandbox/qc_wf.dot'
+        dotfilename=os.path.join(graph_dir, 'qc_wf.dot')
     )
 
     return toplevel_wf

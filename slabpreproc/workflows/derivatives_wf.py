@@ -11,10 +11,12 @@ import nipype.pipeline.engine as pe
 from ..interfaces.derivatives import DerivativesSorter
 
 
-def build_derivatives_wf(deriv_dir):
+def build_derivatives_wf(deriv_dir, iscomplex=False):
     """
     :param deriv_dir: Path object
         Absolute path to derivatives subfolder for this workflow
+    :param iscomplex: bool
+        Complex-valued preprocessing flag
     :return: None
     """
 
@@ -25,21 +27,23 @@ def build_derivatives_wf(deriv_dir):
         util.IdentityInterface(
             fields=[
                 'source_file',
-                'tpl_bold_preproc',
+                'tpl_bold_mag_preproc',
                 'tpl_sbref_preproc',
                 'tpl_seepi_unwarp_mean',
                 'tpl_bold_tmean',
                 'tpl_bold_tsd',
-                'tpl_bold_detrended',
                 'tpl_bold_tsfnr',
                 'tpl_bold_tsfnr_roistats',
-                'moco_pars',
+                'tpl_b0_rads',
+                'tpl_dropout',
+                'motion_csv',
                 'tpl_t1_head',
                 'tpl_t2_head',
                 'tpl_pseg',
                 'tpl_dseg',
                 'tpl_bmask'
-            ]),
+            ]
+        ),
         name='inputs'
     )
 
@@ -50,10 +54,11 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_seepi_unwarp_mean', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tmean_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsd_bold', 'FileType': 'Image'},
-        {'DataType': 'qc', 'NewSuffix': 'recon-detrended_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsfnr_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsfnr_bold_roistats', 'FileType': 'Text'},
-        {'DataType': 'qc', 'NewSuffix': 'recon-moco_bold_pars', 'FileType': 'Text'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-topup_fieldmap', 'FileType': 'Image'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-topup_dropout', 'FileType': 'Image'},
+        {'DataType': 'qc', 'NewSuffix': 'recon-motion_pars', 'FileType': 'CSV'},
         {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_T1w', 'FileType': 'Image'},
         {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_T2w', 'FileType': 'Image'},
         {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_pseg', 'FileType': 'Image'},
@@ -63,7 +68,7 @@ def build_derivatives_wf(deriv_dir):
 
     # Create a list of all inputs
     deriv_list = pe.Node(
-        util.Merge(numinputs=14),
+        util.Merge(numinputs=15),
         name='deriv_list'
     )
 
@@ -86,20 +91,21 @@ def build_derivatives_wf(deriv_dir):
 
         # Create file list
         (inputs, deriv_list, [
-            ('tpl_bold_preproc', 'in1'),
+            ('tpl_bold_mag_preproc', 'in1'),
             ('tpl_sbref_preproc', 'in2'),
             ('tpl_seepi_unwarp_mean', 'in3'),
             ('tpl_bold_tmean', 'in4'),
             ('tpl_bold_tsd', 'in5'),
-            ('tpl_bold_detrended', 'in6'),
-            ('tpl_bold_tsfnr', 'in7'),
-            ('tpl_bold_tsfnr_roistats', 'in8'),
-            ('moco_pars', 'in9'),
-            ('tpl_t1_head', 'in10'),
-            ('tpl_t2_head', 'in11'),
-            ('tpl_pseg', 'in12'),
-            ('tpl_dseg', 'in13'),
-            ('tpl_bmask', 'in14')
+            ('tpl_bold_tsfnr', 'in6'),
+            ('tpl_bold_tsfnr_roistats', 'in7'),
+            ('tpl_b0_rads', 'in8'),
+            ('tpl_dropout', 'in9'),
+            ('motion_csv', 'in10'),
+            ('tpl_t1_head', 'in11'),
+            ('tpl_t2_head', 'in12'),
+            ('tpl_pseg', 'in13'),
+            ('tpl_dseg', 'in14'),
+            ('tpl_bmask', 'in15'),
         ]),
 
         # Pass file list to sorter
