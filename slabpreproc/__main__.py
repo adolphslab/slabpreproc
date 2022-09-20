@@ -59,7 +59,8 @@ def main():
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
     parser.add_argument('--complex', action='store_true', default=False, help="Complex-valued BOLD")
-    parser.add_argument('--nthreads', required=False, default=2, help="Max number of threads")
+    parser.add_argument('--nthreads', required=False, type=int, default=2, choices=range(1, 8),
+                        help="Max number of threads")
     parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
 
     # Parse command line arguments
