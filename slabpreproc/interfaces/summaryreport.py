@@ -6,7 +6,6 @@ PLACE  : Caltech
 DATES  : 2022-08-22 JMT Adapt from topupencfile.py
 """
 
-import os
 import os.path as op
 
 import bids.layout
@@ -18,8 +17,6 @@ from nipype.interfaces.base import (
     traits
 )
 from ..utils import ReportPDF
-
-from nipype.utils.filemanip import split_filename
 
 """
 Identify the SE-EPI fieldmap with the same PE direction as the BOLD series to be unwarped

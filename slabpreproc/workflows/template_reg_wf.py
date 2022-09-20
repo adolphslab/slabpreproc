@@ -12,7 +12,15 @@ import nipype.interfaces.c3 as c3
 import nipype.pipeline.engine as pe
 
 
-def build_template_reg_wf(n_threads=2):
+def build_template_reg_wf(iscomplex=False, nthreads=2):
+    """
+
+    :param iscomplex: bool
+        Complex-valued preprocessing flag
+    :param nthreads: int
+        Maximum number of threads allowed
+    :return:
+    """
 
     # Template inputs
     inputs = pe.Node(
@@ -62,7 +70,7 @@ def build_template_reg_wf(n_threads=2):
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
             input_image_type=0,
-            num_threads=n_threads
+            num_threads=nthreads
         ),
         name='resamp_seepi_tpl'
     )
@@ -71,7 +79,7 @@ def build_template_reg_wf(n_threads=2):
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
             input_image_type=0,
-            num_threads=n_threads
+            num_threads=nthreads
         ),
         name='resamp_sbref_tpl'
     )
@@ -80,7 +88,7 @@ def build_template_reg_wf(n_threads=2):
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
             input_image_type=0,
-            num_threads=n_threads
+            num_threads=nthreads
         ),
         name='resamp_b0_tpl'
     )
@@ -89,7 +97,7 @@ def build_template_reg_wf(n_threads=2):
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
             input_image_type=3,
-            num_threads=n_threads,
+            num_threads=nthreads,
         ),
         name='resamp_bold_tpl'
     )

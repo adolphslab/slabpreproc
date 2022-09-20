@@ -59,6 +59,7 @@ def main():
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
     parser.add_argument('--complex', action='store_true', default=False, help="Complex-valued BOLD")
+    parser.add_argument('--nthreads', required=False, default=2, help="Max number of threads")
     parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
 
     # Parse command line arguments
@@ -105,6 +106,7 @@ def main():
     print(f'Subject ID     : {subj_id}')
     print(f'Session ID     : {sess_id}')
     print(f'Complex BOLD   : {args.complex}')
+    print(f'Max threads    : {args.nthreads}')
     print(f'Debug mode     : {args.debug}')
 
     # Get T1 and T2 templates and subcortical labels from templateflow repo
@@ -234,7 +236,7 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, args.complex)
+        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, args.complex, args.nthreads)
 
         # Supply input images
         toplevel_wf.inputs.inputs.bold_mag = bold_mag_path

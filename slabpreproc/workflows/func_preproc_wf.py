@@ -16,7 +16,15 @@ from ..interfaces import SEEPIRef
 # from niworkflows.interfaces.itk import MCFLIRT2ITK
 
 
-def build_func_preproc_wf(n_threads=2):
+def build_func_preproc_wf(iscomplex=False, nthreads=2):
+    """
+
+    :param iscomplex: bool
+        Complex-valued preprocessing flag
+    :param nthreads: int
+        Maximum number of threads allowed
+    :return:
+    """
 
     # Preproc inputs
     inputs = pe.Node(
@@ -41,7 +49,7 @@ def build_func_preproc_wf(n_threads=2):
     sbref2seepi = pe.Node(
         ants.RegistrationSynQuick(
             transform_type='r',
-            num_threads=n_threads
+            num_threads=nthreads
         ),
         name='sbref2seepi',
         terminal_output=None

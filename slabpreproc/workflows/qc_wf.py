@@ -18,7 +18,15 @@ from ..interfaces.motion import Motion
 from ..interfaces.dropout import Dropout
 
 
-def build_qc_wf(iscomplex=False):
+def build_qc_wf(iscomplex=False, nthreads=2):
+    """
+
+    :param iscomplex: bool
+        Complex-valued preprocessing flag
+    :param nthreads: int
+        Maximum number of threads allowed
+    :return:
+    """
 
     # QC inputs
     inputs = pe.Node(
@@ -49,7 +57,7 @@ def build_qc_wf(iscomplex=False):
     calc_fd = pe.Node(
         confounds.FramewiseDisplacement(
             parameter_source='FSL',
-            save_plot=True,
+            save_plot=False,
         ),
         name='calc_fd'
     )
