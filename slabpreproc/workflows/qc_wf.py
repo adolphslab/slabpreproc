@@ -18,11 +18,8 @@ from ..interfaces.motion import Motion
 from ..interfaces.dropout import Dropout
 
 
-def build_qc_wf(iscomplex=False, nthreads=2):
+def build_qc_wf(nthreads=2):
     """
-
-    :param iscomplex: bool
-        Complex-valued preprocessing flag
     :param nthreads: int
         Maximum number of threads allowed
     :return:

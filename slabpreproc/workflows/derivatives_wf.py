@@ -11,12 +11,10 @@ import nipype.pipeline.engine as pe
 from ..interfaces.derivatives import DerivativesSorter
 
 
-def build_derivatives_wf(deriv_dir, iscomplex=False):
+def build_derivatives_wf(deriv_dir):
     """
     :param deriv_dir: Path object
         Absolute path to derivatives subfolder for this workflow
-    :param iscomplex: bool
-        Complex-valued preprocessing flag
     :return: None
     """
 

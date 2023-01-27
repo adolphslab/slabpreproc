@@ -44,7 +44,7 @@ import nipype.pipeline.engine as pe
 # config.enable_debug_mode()
 
 
-def build_toplevel_wf(work_dir, deriv_dir, iscomplex=False, nthreads=2):
+def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
     """
     Build main subcortical QC workflow
 
@@ -52,8 +52,6 @@ def build_toplevel_wf(work_dir, deriv_dir, iscomplex=False, nthreads=2):
         Path to working directory
     :param deriv_dir: str
         Path to derivatives directory
-    :param iscomplex: bool
-        Complex-valued preprocessing flag
     :param nthreads: int
         Maximum number of threads allowed
     :return:
@@ -81,14 +79,14 @@ def build_toplevel_wf(work_dir, deriv_dir, iscomplex=False, nthreads=2):
     )
 
     # Sub-workflows setup
-    func_preproc_wf = build_func_preproc_wf(iscomplex=iscomplex, nthreads=nthreads)
-    template_reg_wf = build_template_reg_wf(iscomplex=iscomplex, nthreads=nthreads)
-    qc_wf = build_qc_wf(iscomplex=iscomplex, nthreads=nthreads)
-    derivatives_wf = build_derivatives_wf(deriv_dir, iscomplex=iscomplex)
+    func_preproc_wf = build_func_preproc_wf(nthreads=nthreads)
+    template_reg_wf = build_template_reg_wf(nthreads=nthreads)
+    qc_wf = build_qc_wf(nthreads=nthreads)
+    derivatives_wf = build_derivatives_wf(deriv_dir)
 
     # Summary report node
     summary_report = pe.Node(
-        SummaryReport(deriv_dir=deriv_dir, iscomplex=iscomplex),
+        SummaryReport(deriv_dir=deriv_dir),
         overwrite=True,  # Always regenerate report
         name='summary_report'
     )

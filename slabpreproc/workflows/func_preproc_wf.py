@@ -16,11 +16,8 @@ from ..interfaces import SEEPIRef
 # from niworkflows.interfaces.itk import MCFLIRT2ITK
 
 
-def build_func_preproc_wf(iscomplex=False, nthreads=2):
+def build_func_preproc_wf(nthreads=2):
     """
-
-    :param iscomplex: bool
-        Complex-valued preprocessing flag
     :param nthreads: int
         Maximum number of threads allowed
     :return:

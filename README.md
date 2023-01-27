@@ -3,12 +3,12 @@
 * Optimized for partial-brain slab coverage
 * generates basic quality control metrics
 * uses TOPUP for SDC
+* Implemented in nipype
+* Wraps ANTs, AFNI and FSL
 
 ## Feature Requests
-* support for complex-valued BOLD data
+* WIP: support for complex-valued BOLD data
 
-Implemented in nipype  
-Depends on ANTs, AFNI and FSL
 
 ## Test Data
 A pared-down dataset derived from the original DenseAmy dataset can be found here:

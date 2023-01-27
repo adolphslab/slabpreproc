@@ -12,11 +12,8 @@ import nipype.interfaces.c3 as c3
 import nipype.pipeline.engine as pe
 
 
-def build_template_reg_wf(iscomplex=False, nthreads=2):
+def build_template_reg_wf(nthreads=2):
     """
-
-    :param iscomplex: bool
-        Complex-valued preprocessing flag
     :param nthreads: int
         Maximum number of threads allowed
     :return:
