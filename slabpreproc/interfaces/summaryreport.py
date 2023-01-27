@@ -32,11 +32,6 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
-    iscomplex = traits.Bool(
-        desc='Complex-valued preprocessing flag',
-        mandatory=True
-    )
-
     source_bold = File(
         desc='Source BOLD image (metadata reference)',
         exists=True,
@@ -130,7 +125,6 @@ class SummaryReport(BaseInterface):
             self._gen_report_dname(),
             report_files,
             self.inputs.source_bold_meta,
-            self.inputs.iscomplex
         )
 
         return runtime
