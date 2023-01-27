@@ -24,7 +24,6 @@ def build_template_reg_wf(nthreads=2):
         util.IdentityInterface(
             fields=[
                 'bold_mag_preproc',
-                'bold_phase_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
                 'tpl_t2_head',

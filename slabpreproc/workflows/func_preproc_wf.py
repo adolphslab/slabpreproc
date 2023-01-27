@@ -28,7 +28,6 @@ def build_func_preproc_wf(nthreads=2):
         util.IdentityInterface(
             fields=(
                 'bold_mag',
-                'bold_phase',
                 'bold_mag_meta',
                 'sbref',
                 'sbref_meta',
@@ -124,9 +123,8 @@ def build_func_preproc_wf(nthreads=2):
         name='unwarp_sbref'
     )
 
-
     # Derive signal dropout map from TOPUP B0 field estimate
-    # JMT Maybe replace this with template MEMPRAGE B0 map
+    # JMT Consider deriving from high resolution MEMPRAGE B0 map
 
     hz2rads = pe.Node(
         fsl.ImageMaths(
@@ -140,7 +138,6 @@ def build_func_preproc_wf(nthreads=2):
         util.IdentityInterface(
             fields=(
                 'bold_mag_preproc',
-                'bold_phase_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
                 'moco_pars',

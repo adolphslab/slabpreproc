@@ -58,7 +58,6 @@ def main():
     parser.add_argument('-w', '--workdir', help='Work directory')
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
-    parser.add_argument('--complex', action='store_true', default=False, help="Complex-valued BOLD")
     parser.add_argument('--nthreads', required=False, type=int, default=2, choices=range(1, 8),
                         help="Max number of threads")
     parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
@@ -106,7 +105,6 @@ def main():
     print(f'Work directory : {work_dir}')
     print(f'Subject ID     : {subj_id}')
     print(f'Session ID     : {sess_id}')
-    print(f'Complex BOLD   : {args.complex}')
     print(f'Max threads    : {args.nthreads}')
     print(f'Debug mode     : {args.debug}')
 
@@ -180,23 +178,6 @@ def main():
         # Parse filename keys
         keys = bids.layout.parse_file_entities(bold_mag)
 
-        if args.complex:
-
-            filter = {
-                'datatype': 'func',
-                'suffix': 'bold',
-                'part': 'phase',
-                'extension': ['.nii', '.nii.gz'],
-                'task': keys['task']
-            }
-            bold_phase = layout.get(subject=subj_id, session=sess_id, **filter)
-            assert len(bold_phase) > 0, print('No phase images found for this BOLD series')
-            bold_phase_path = bold_phase[0].path
-
-        else:
-
-            bold_phase_path = []
-
         # Separate work folder for each BOLD image
         bold_stub = op.basename(bold_mag).split(".nii")[0]
         this_work_dir = work_dir / bold_stub
@@ -237,11 +218,10 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, args.complex, args.nthreads)
+        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, args.nthreads)
 
         # Supply input images
         toplevel_wf.inputs.inputs.bold_mag = bold_mag_path
-        toplevel_wf.inputs.inputs.bold_phase = bold_phase_path
         toplevel_wf.inputs.inputs.bold_mag_meta = bold_mag_meta
         toplevel_wf.inputs.inputs.sbref = sbref_path
         toplevel_wf.inputs.inputs.sbref_meta = sbref_meta

@@ -62,7 +62,6 @@ def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
         util.IdentityInterface(
             fields=[
                 'bold_mag',
-                'bold_phase',
                 'bold_mag_meta',
                 'sbref',
                 'sbref_meta',
@@ -102,7 +101,6 @@ def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
         # Func preproc inputs
         (inputs, func_preproc_wf, [
             ('bold_mag', 'inputs.bold_mag'),
-            ('bold_phase', 'inputs.bold_phase'),
             ('bold_mag_meta', 'inputs.bold_mag_meta'),
             ('sbref', 'inputs.sbref'),
             ('sbref_meta', 'inputs.sbref_meta'),
@@ -118,7 +116,6 @@ def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
         (func_preproc_wf, template_reg_wf, [
             ('outputs.sbref_preproc', 'inputs.sbref_preproc'),
             ('outputs.bold_mag_preproc', 'inputs.bold_mag_preproc'),
-            ('outputs.bold_phase_preproc', 'inputs.bold_phase_preproc'),
             ('outputs.seepi_unwarp_mean', 'inputs.seepi_unwarp_mean'),
             ('outputs.topup_b0_rads', 'inputs.topup_b0_rads')
         ]),
