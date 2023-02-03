@@ -39,14 +39,15 @@ def build_derivatives_wf(deriv_dir):
                 'tpl_t2_head',
                 'tpl_pseg',
                 'tpl_dseg',
-                'tpl_bmask'
+                'tpl_bmask',
+                'melodic_out_dir'  # Folder - separate handling
             ]
         ),
         name='inputs'
     )
 
-    # Sorting info
-    sort_dict_list = [
+    # File sorting dictionary list
+    file_sort_dicts = [
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_bold', 'FileType': 'Image'},
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_sbref', 'FileType': 'Image'},
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_seepi_unwarp_mean', 'FileType': 'Image'},
@@ -64,10 +65,21 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_desc-brain_mask', 'FileType': 'Image'},
     ]
 
-    # Create a list of all inputs
-    deriv_list = pe.Node(
+    # Folder sorting dictionary list
+    folder_sort_dicts = [
+        {'DerivativesFolder': 'melodic'}
+    ]
+
+    # Create a list of all file inputs
+    deriv_file_list = pe.Node(
         util.Merge(numinputs=15),
-        name='deriv_list'
+        name='deriv_file_list'
+    )
+
+    # Create a list of all folder inputs
+    deriv_folder_list = pe.Node(
+        util.Merge(numinputs=1),
+        name='deriv_folder_list'
     )
 
     # Build multi-input derivatives output sorter
@@ -75,7 +87,8 @@ def build_derivatives_wf(deriv_dir):
     deriv_sorter = pe.Node(
         DerivativesSorter(
             deriv_dir=deriv_dir,
-            sort_dict_list=sort_dict_list
+            file_sort_dicts=file_sort_dicts,
+            folder_sort_dicts=folder_sort_dicts
         ),
         name='deriv_sorter'
     )
@@ -87,8 +100,8 @@ def build_derivatives_wf(deriv_dir):
         # Slab preproc and QC results to BIDS derivatives sorter
         (inputs, deriv_sorter, [('source_file', 'source_file')]),
 
-        # Create file list
-        (inputs, deriv_list, [
+        # Create file list and pass to sorter
+        (inputs, deriv_file_list, [
             ('tpl_bold_mag_preproc', 'in1'),
             ('tpl_sbref_preproc', 'in2'),
             ('tpl_seepi_unwarp_mean', 'in3'),
@@ -105,9 +118,13 @@ def build_derivatives_wf(deriv_dir):
             ('tpl_dseg', 'in14'),
             ('tpl_bmask', 'in15'),
         ]),
+        (deriv_file_list, deriv_sorter, [('out', 'file_list')]),
 
-        # Pass file list to sorter
-        (deriv_list, deriv_sorter, [('out', 'file_list')])
+        # Create folder list and pass to sorter
+        (inputs, deriv_folder_list, [
+            ('melodic_out_dir', 'in1')
+        ]),
+        (deriv_folder_list, deriv_sorter, [('out', 'folder_list')]),
 
     ])
 

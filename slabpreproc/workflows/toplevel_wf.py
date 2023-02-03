@@ -35,6 +35,7 @@ from .qc_wf import build_qc_wf
 from .func_preproc_wf import build_func_preproc_wf
 from .template_reg_wf import build_template_reg_wf
 from .derivatives_wf import build_derivatives_wf
+from .melodic_wf import build_melodic_wf
 from ..interfaces.summaryreport import SummaryReport
 
 import nipype.interfaces.utility as util
@@ -44,7 +45,7 @@ import nipype.pipeline.engine as pe
 # config.enable_debug_mode()
 
 
-def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
+def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
     """
     Build main subcortical QC workflow
 
@@ -52,6 +53,8 @@ def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
         Path to working directory
     :param deriv_dir: str
         Path to derivatives directory
+    :param bold_mag_meta: dict
+        BOLD magnitude image metadata
     :param nthreads: int
         Maximum number of threads allowed
     :return:
@@ -77,10 +80,14 @@ def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
         name='inputs'
     )
 
+    # Extract TR in seconds from metadata for melodic
+    tr_s = bold_mag_meta['RepetitionTime']
+
     # Sub-workflows setup
     func_preproc_wf = build_func_preproc_wf(nthreads=nthreads)
     template_reg_wf = build_template_reg_wf(nthreads=nthreads)
     qc_wf = build_qc_wf(nthreads=nthreads)
+    melodic_wf = build_melodic_wf(tr_s=tr_s)
     derivatives_wf = build_derivatives_wf(deriv_dir)
 
     # Summary report node
@@ -136,6 +143,18 @@ def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
             ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
         ]),
 
+        # Connect melodic workflow
+        (template_reg_wf, melodic_wf, [
+            ('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc'),
+        ]),
+        (inputs, melodic_wf, [
+            ('tpl_t1_head', 'inputs.tpl_t1_head'),
+            ('tpl_bmask', 'inputs.tpl_bmask')
+        ]),
+        (qc_wf, melodic_wf, [
+            ('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean'),
+        ]),
+
         # Connect derivatives outputs
         (inputs, derivatives_wf, [
             ('bold_mag', 'inputs.source_file'),
@@ -157,6 +176,11 @@ def build_toplevel_wf(work_dir, deriv_dir, nthreads=2):
             ('outputs.tpl_bold_tsfnr_roistats', 'inputs.tpl_bold_tsfnr_roistats'),
             ('outputs.tpl_dropout', 'inputs.tpl_dropout'),
             ('outputs.motion_csv', 'inputs.motion_csv')
+        ]),
+
+        # Write MELODIC results to derivatives folder
+        (melodic_wf, derivatives_wf, [
+            ('outputs.out_dir', 'inputs.melodic_out_dir'),
         ]),
 
         # Write atlas images and templates to derivatives folder
