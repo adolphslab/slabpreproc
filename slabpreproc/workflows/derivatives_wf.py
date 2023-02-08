@@ -65,21 +65,21 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_desc-brain_mask', 'FileType': 'Image'},
     ]
 
-    # Folder sorting dictionary list
+    # Folder sorting dictionary list - needs separate Traits handling
     folder_sort_dicts = [
-        {'DerivativesFolder': 'melodic'}
+        {'DataType': 'melodic', 'NewSuffix': 'melodic', 'FileType': 'Folder'}
     ]
 
     # Create a list of all file inputs
     deriv_file_list = pe.Node(
-        util.Merge(numinputs=15),
+        util.Merge(numinputs=len(file_sort_dicts)),
         name='deriv_file_list',
         overwrite=True
     )
 
     # Create a list of all folder inputs
     deriv_folder_list = pe.Node(
-        util.Merge(numinputs=1),
+        util.Merge(numinputs=len(folder_sort_dicts)),
         name='deriv_folder_list',
         overwrite = True
     )

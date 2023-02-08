@@ -101,22 +101,19 @@ class DerivativesSorter(BaseInterface):
         source_bname, _ = op.splitext(source_bname)
 
         # Output derivatives root folder
-        deriv_dir = self.inputs.deriv_dir
+        deriv_dname = self.inputs.deriv_dir
+        subjsess_deriv_dname = op.join(deriv_dname, 'sub-' + subj_id, 'ses-' + sess_id)
 
         # Loop over all input files and associated sorting dicts
         for in_pname, sort_dict in zip(self.inputs.file_list, self.inputs.file_sort_dicts):
 
-            # subject/session/datatype output subfolder
+            # Safe create data type subfolder (eg preproc)
+            datatype_out_dname = op.join(subjsess_deriv_dname, sort_dict['DataType'])
+            os.makedirs(datatype_out_dname, exist_ok=True)
 
-            data_type = sort_dict['DataType']
-            out_dir = op.join(deriv_dir, 'sub-' + subj_id, 'ses-' + sess_id, data_type)
-
-            # Safe create derivatives subfolder
-            os.makedirs(out_dir, exist_ok=True)
-
-            # Output file path. Replace current suffix with new suffix
+            # Output file path. Replace current suffix (eg _bold) with new suffix (eg _recon-preproc_sbref)
             new_suffix = sort_dict['NewSuffix']
-            out_pstub = op.join(out_dir, source_bname.replace(old_suffix, new_suffix))
+            out_pstub = op.join(datatype_out_dname, source_bname.replace(old_suffix, new_suffix))
 
             if 'Text' in sort_dict['FileType']:
                 out_pname = out_pstub + '.txt'
@@ -125,30 +122,30 @@ class DerivativesSorter(BaseInterface):
             else:
                 out_pname = out_pstub + old_ext
 
-            # Copy input file to deriv_dir/subj_dir/sess_dir/out_file
+            # Copy input file to deriv_dname/subj_dir/sess_dir/out_file
             shutil.copyfile(in_pname, out_pname)
 
         # Output folder handling
         # Copying nipype output folders (eg melodic) to derivatives
 
-        # Safe create subject/session output folder
-        subjsess_out_dname = op.join(
-            'sub-' + subj_id, 'ses-' + sess_id,
-            sort_dict['DerivativesFolder']
-        )
-        os.makedirs(subjsess_out_dname, exist_ok=True)
-
         # Loop over all input folders and associated sorting dicts
         for in_dname, sort_dict in zip(self.inputs.folder_list, self.inputs.folder_sort_dicts):
 
-            # Task-specific output folder name. nipype folder contents are copied here
-            task_out_dname = op.join(subjsess_out_dname, source_bname)
+            # Safe create data type subfolder (eg melodic)
+            datatype_out_dname = op.join(subjsess_deriv_dname, sort_dict['DataType'])
+            os.makedirs(datatype_out_dname, exist_ok=True)
 
-            # Copy nipype folder to deriv_dir/subj_dir/sess_dir/out_dir
-            shutil.copytree(in_dname, task_out_dname, dirs_exist_ok=True)
+            # Output subfolder path. Replace current suffix (eg _bold) with new suffix (eg _melodic)
+            new_suffix = sort_dict['NewSuffix']
+            out_pname = op.join(datatype_out_dname, source_bname.replace(old_suffix, new_suffix))
+
+            # Copy nipype folder to deriv_dname/subj_dir/sess_dir/task_out_dname
+            print(f'  Copying {in_dname}')
+            print(f'  to {out_pname}')
+            shutil.copytree(in_dname, out_pname, dirs_exist_ok=True)
 
             # Remove all Nipype auxiliary files from output folder ('_*' and '*.pklz')
-            fnames = glob(op.join(task_out_dname, '_*')) + glob(op.join(task_out_dname, '*.pklz'))
+            fnames = glob(op.join(out_pname, '_*')) + glob(op.join(out_pname, '*.pklz'))
             for fname in fnames:
                 if op.isfile(fname):
                     os.remove(fname)
