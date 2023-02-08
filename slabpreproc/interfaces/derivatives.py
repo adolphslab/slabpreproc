@@ -96,6 +96,7 @@ class DerivativesSorter(BaseInterface):
         old_ext = keys['extension']
 
         # Strip maximum of two extensions
+        # Handles both .nii and nii.gz extensions
         source_bname, _ = op.splitext(source_bname)
         source_bname, _ = op.splitext(source_bname)
 
@@ -127,17 +128,27 @@ class DerivativesSorter(BaseInterface):
             # Copy input file to deriv_dir/subj_dir/sess_dir/out_file
             shutil.copyfile(in_pname, out_pname)
 
+        # Output folder handling
+        # Copying nipype output folders (eg melodic) to derivatives
+
+        # Safe create subject/session output folder
+        subjsess_out_dname = op.join(
+            'sub-' + subj_id, 'ses-' + sess_id,
+            sort_dict['DerivativesFolder']
+        )
+        os.makedirs(subjsess_out_dname, exist_ok=True)
+
         # Loop over all input folders and associated sorting dicts
         for in_dname, sort_dict in zip(self.inputs.folder_list, self.inputs.folder_sort_dicts):
 
-            # Subject/session output folder
-            out_dir = op.join(deriv_dir, 'sub-' + subj_id, 'ses-' + sess_id, sort_dict['DerivativesFolder'])
+            # Task-specific output folder name. nipype folder contents are copied here
+            task_out_dname = op.join(subjsess_out_dname, source_bname)
 
             # Copy nipype folder to deriv_dir/subj_dir/sess_dir/out_dir
-            shutil.copytree(in_dname, out_dir, dirs_exist_ok=True)
+            shutil.copytree(in_dname, task_out_dname, dirs_exist_ok=True)
 
             # Remove all Nipype auxiliary files from output folder ('_*' and '*.pklz')
-            fnames = glob(op.join(out_dir, '_*')) + glob(op.join(out_dir, '*.pklz'))
+            fnames = glob(op.join(task_out_dname, '_*')) + glob(op.join(task_out_dname, '*.pklz'))
             for fname in fnames:
                 if op.isfile(fname):
                     os.remove(fname)
