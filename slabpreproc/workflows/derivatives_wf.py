@@ -73,15 +73,13 @@ def build_derivatives_wf(deriv_dir):
     # Create a list of all file inputs
     deriv_file_list = pe.Node(
         util.Merge(numinputs=len(file_sort_dicts)),
-        name='deriv_file_list',
-        overwrite=True
+        name='deriv_file_list'
     )
 
     # Create a list of all folder inputs
     deriv_folder_list = pe.Node(
         util.Merge(numinputs=len(folder_sort_dicts)),
-        name='deriv_folder_list',
-        overwrite = True
+        name='deriv_folder_list'
     )
 
     # Build multi-input derivatives output sorter
@@ -92,8 +90,7 @@ def build_derivatives_wf(deriv_dir):
             file_sort_dicts=file_sort_dicts,
             folder_sort_dicts=folder_sort_dicts
         ),
-        name='deriv_sorter',
-        overwrite=True
+        name='deriv_sorter'
     )
 
     # Connect workflow

@@ -257,6 +257,7 @@ def gen_bids_layout(bids_dir):
             "stimuli",
             "sourcedata",
             "models",
+            "exclude",
             re.compile(r"^\."),
             re.compile(
                 r"sub-[a-zA-Z\d]+(/ses-[a-zA-Z\d]+)?/(beh|dwi|eeg|ieeg|meg|perf)"
