@@ -23,11 +23,6 @@ from nipype.interfaces.base import (
     TraitedSpec,
 )
 
-"""
-Derive FD and lpf FD from FSL motion parameters
-Output full motion timeseries table as CSV with headers
-"""
-
 
 class DropoutInputSpec(BaseInterfaceInputSpec):
     mseepi = File(
