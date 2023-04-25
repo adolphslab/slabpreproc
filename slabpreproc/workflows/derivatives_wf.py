@@ -7,8 +7,8 @@ Build workflow to name and place pipeline results appropriately in the BIDS deri
 
 import os.path as op
 import nipype.interfaces.utility as util
+import nipype.interfaces.io as io
 import nipype.pipeline.engine as pe
-import nipype.utils.filemanip as fm
 
 from ..interfaces.derivatives import DerivativesSorter
 
@@ -90,18 +90,9 @@ def build_derivatives_wf(deriv_dir):
         name='deriv_sorter'
     )
 
-    # Create list of templateflow templates/labels
-    template_list = pe.Node(
-        util.Merge(numinputs=5),
-        name='template_list'
-    )
-
     # Copy templateflow individual templates/labels to atlas/ output folder
     template_copy = pe.Node(
-        fm.copyfiles(
-            filelist=[],
-            dest=op.join(deriv_dir, 'atlas')
-        ),
+        io.DataSink(base_directory=deriv_dir),
         name='template_copy'
     )
 
@@ -134,16 +125,13 @@ def build_derivatives_wf(deriv_dir):
         (deriv_folder_list, deriv_sorter, [('out', 'folder_list')]),
 
         # Copy individual templates/labels to atlas/ folder
-        (inputs, template_list, [
-            ('tpl_t1_head', 'in1'),
-            ('tpl_t2_head', 'in2'),
-            ('tpl_pseg', 'in3'),
-            ('tpl_dseg', 'in4'),
-            ('tpl_bmask','in5')
+        (inputs, template_copy, [
+            ('tpl_t1_head', 'atlas.@t1'),
+            ('tpl_t2_head', 'atlas.@t2'),
+            ('tpl_pseg', 'atlas.@pseg'),
+            ('tpl_dseg', 'atlas.@dseg'),
+            ('tpl_bmask','atlas.@bmask')
         ]),
-        (template_list, template_copy, [
-            ('out', 'filelist')
-        ])
 
     ])
 
