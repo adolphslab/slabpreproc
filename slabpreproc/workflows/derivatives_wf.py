@@ -92,7 +92,7 @@ def build_derivatives_wf(deriv_dir):
 
     # Copy templateflow individual templates/labels to atlas/ output folder
     template_copy = pe.Node(
-        io.DataSink(base_directory=deriv_dir),
+        io.DataSink(base_directory=str(deriv_dir)),
         name='template_copy'
     )
 
