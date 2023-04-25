@@ -29,10 +29,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+
 import os
 
 from .qc_wf import build_qc_wf
 from .func_preproc_wf import build_func_preproc_wf
+from .func_surf_wf import build_func_surf_wf
 from .template_reg_wf import build_template_reg_wf
 from .derivatives_wf import build_derivatives_wf
 from .melodic_wf import build_melodic_wf
@@ -85,6 +87,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
 
     # Sub-workflows setup
     func_preproc_wf = build_func_preproc_wf(nthreads=nthreads)
+    func_surf_wf = build_func_surf_wf()
     template_reg_wf = build_template_reg_wf(nthreads=nthreads)
     qc_wf = build_qc_wf(nthreads=nthreads)
     melodic_wf = build_melodic_wf(tr_s=tr_s)

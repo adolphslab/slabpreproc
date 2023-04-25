@@ -5,8 +5,10 @@
 Build workflow to name and place pipeline results appropriately in the BIDS derivatives folder
 """
 
+import os.path as op
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
+import nipype.utils.filemanip as fm
 
 from ..interfaces.derivatives import DerivativesSorter
 
@@ -58,11 +60,6 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'qc', 'NewSuffix': 'recon-topup_fieldmap', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-topup_dropout', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-motion_pars', 'FileType': 'CSV'},
-        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_T1w', 'FileType': 'Image'},
-        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_T2w', 'FileType': 'Image'},
-        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_pseg', 'FileType': 'Image'},
-        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_dseg', 'FileType': 'Image'},
-        {'DataType': 'atlas', 'NewSuffix': 'atlas-cit168_desc-brain_mask', 'FileType': 'Image'},
     ]
 
     # Folder sorting dictionary list - needs separate Traits handling
@@ -83,7 +80,7 @@ def build_derivatives_wf(deriv_dir):
     )
 
     # Build multi-input derivatives output sorter
-    # Renames and sorts inputs into correct derivatives heirarchy
+    # Renames and sorts inputs into correct derivatives hierarchy
     deriv_sorter = pe.Node(
         DerivativesSorter(
             deriv_dir=deriv_dir,
@@ -91,6 +88,21 @@ def build_derivatives_wf(deriv_dir):
             folder_sort_dicts=folder_sort_dicts
         ),
         name='deriv_sorter'
+    )
+
+    # Create list of templateflow templates/labels
+    template_list = pe.Node(
+        util.Merge(numinputs=5),
+        name='template_list'
+    )
+
+    # Copy templateflow individual templates/labels to atlas/ output folder
+    template_copy = pe.Node(
+        fm.copyfiles(
+            filelist=[],
+            dest=op.join(deriv_dir, 'atlas')
+        ),
+        name='template_copy'
     )
 
     # Connect workflow
@@ -112,11 +124,6 @@ def build_derivatives_wf(deriv_dir):
             ('tpl_b0_rads', 'in8'),
             ('tpl_dropout', 'in9'),
             ('motion_csv', 'in10'),
-            ('tpl_t1_head', 'in11'),
-            ('tpl_t2_head', 'in12'),
-            ('tpl_pseg', 'in13'),
-            ('tpl_dseg', 'in14'),
-            ('tpl_bmask', 'in15'),
         ]),
         (deriv_file_list, deriv_sorter, [('out', 'file_list')]),
 
@@ -125,6 +132,18 @@ def build_derivatives_wf(deriv_dir):
             ('melodic_out_dir', 'in1')
         ]),
         (deriv_folder_list, deriv_sorter, [('out', 'folder_list')]),
+
+        # Copy individual templates/labels to atlas/ folder
+        (inputs, template_list, [
+            ('tpl_t1_head', 'in1'),
+            ('tpl_t2_head', 'in2'),
+            ('tpl_pseg', 'in3'),
+            ('tpl_dseg', 'in4'),
+            ('tpl_bmask','in5')
+        ]),
+        (template_list, template_copy, [
+            ('out', 'filelist')
+        ])
 
     ])
 

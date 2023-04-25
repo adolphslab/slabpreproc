@@ -26,7 +26,7 @@ def build_func_surf_wf():
     :return:
     """
 
-    # Preproc inputs
+    # Preprocessed inputs
     inputs = pe.Node(
         util.IdentityInterface(
             fields=(
