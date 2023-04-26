@@ -178,6 +178,9 @@ def main():
         # Parse filename keys
         keys = bids.layout.parse_file_entities(bold_mag)
 
+        # Save task ID
+        task_id = keys['task']
+
         # Separate work folder for each BOLD image
         bold_stub = op.basename(bold_mag).split(".nii")[0]
         this_work_dir = work_dir / bold_stub
@@ -187,14 +190,14 @@ def main():
         # Find SBRef for this BOLD magnitude image
         #
 
-        filter = {
+        bids_filter = {
             'datatype': 'func',
             'suffix': 'sbref',
             'part': 'mag',
             'extension': ['.nii', '.nii.gz'],
-            'task': keys['task']
+            'task': task_id
         }
-        sbref = layout.get(subject=subj_id, session=sess_id, **filter)
+        sbref = layout.get(subject=subj_id, session=sess_id, **bids_filter)
         assert len(sbref) > 0, print('No SBRef found for this BOLD series')
 
         # SBRef metadata (should only be one)
@@ -205,12 +208,12 @@ def main():
         # Find fieldmaps for this BOLD series
         #
 
-        filter = {
+        bids_filter = {
             'datatype': 'fmap',
             'suffix': 'epi', 'part': 'mag', 'extension': ['.nii', '.nii.gz'],
-            'acquisition': keys['task']
+            'acquisition': task_id
         }
-        fmaps = layout.get(subject=subj_id, session=sess_id, **filter)
+        fmaps = layout.get(subject=subj_id, session=sess_id, **bids_filter)
         assert len(fmaps) == 2, 'Fewer than 2 SE-EPI fieldmaps found'
 
         # Create fieldmap path and metadata lists

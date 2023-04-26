@@ -23,8 +23,6 @@ from nipype.interfaces.base import (
     TraitedSpec
 )
 
-from nipype.utils.filemanip import split_filename
-
 """
 Populate correct derivatives subfolder with input data file
 """
@@ -111,16 +109,27 @@ class DerivativesSorter(BaseInterface):
             datatype_out_dname = op.join(subjsess_deriv_dname, sort_dict['DataType'])
             os.makedirs(datatype_out_dname, exist_ok=True)
 
-            # Output file path. Replace current suffix (eg _bold) with new suffix (eg _recon-preproc_sbref)
-            new_suffix = sort_dict['NewSuffix']
-            out_pstub = op.join(datatype_out_dname, source_bname.replace(old_suffix, new_suffix))
+            # Output file path
+            # Construction depends on whether preproc output or atlas templates are being copied to derivatives
 
-            if 'Text' in sort_dict['FileType']:
-                out_pname = out_pstub + '.txt'
-            elif 'CSV' in sort_dict['FileType']:
-                out_pname = out_pstub + '.csv'
+            if 'atlas' in sort_dict['DataType']:
+
+                # Simple copy of template/label image to derivatives/.../atlas/ folder
+                out_pname = op.join(datatype_out_dname, op.basename(in_pname))
+
             else:
-                out_pname = out_pstub + old_ext
+
+                # Replace current suffix (eg _bold) with new suffix (eg _recon-preproc_sbref)
+                new_suffix = sort_dict['NewSuffix']
+                out_pstub = op.join(datatype_out_dname, source_bname.replace(old_suffix, new_suffix))
+
+                # File type dependent extensions
+                if 'Text' in sort_dict['FileType']:
+                    out_pname = out_pstub + '.txt'
+                elif 'CSV' in sort_dict['FileType']:
+                    out_pname = out_pstub + '.csv'
+                else:
+                    out_pname = out_pstub + old_ext
 
             # Copy input file to deriv_dname/subj_dir/sess_dir/out_file
             shutil.copyfile(in_pname, out_pname)

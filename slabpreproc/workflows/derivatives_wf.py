@@ -5,9 +5,7 @@
 Build workflow to name and place pipeline results appropriately in the BIDS derivatives folder
 """
 
-import os.path as op
 import nipype.interfaces.utility as util
-import nipype.interfaces.io as io
 import nipype.pipeline.engine as pe
 
 from ..interfaces.derivatives import DerivativesSorter
@@ -60,6 +58,11 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'qc', 'NewSuffix': 'recon-topup_fieldmap', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-topup_dropout', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-motion_pars', 'FileType': 'CSV'},
+        {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
     ]
 
     # Folder sorting dictionary list - needs separate Traits handling
@@ -90,17 +93,10 @@ def build_derivatives_wf(deriv_dir):
         name='deriv_sorter'
     )
 
-    # Copy templateflow individual templates/labels to atlas/ output folder
-    template_copy = pe.Node(
-        io.DataSink(base_directory=str(deriv_dir)),
-        name='template_copy'
-    )
-
     # Connect workflow
-    # source_file passed to all data sinks for use as a filename template
     derivatives_wf.connect([
 
-        # Slab preproc and QC results to BIDS derivatives sorter
+        # Pass source BOLD filename to derivatives sorter as a filename template
         (inputs, deriv_sorter, [('source_file', 'source_file')]),
 
         # Create file list and pass to sorter
@@ -115,23 +111,21 @@ def build_derivatives_wf(deriv_dir):
             ('tpl_b0_rads', 'in8'),
             ('tpl_dropout', 'in9'),
             ('motion_csv', 'in10'),
+            ('tpl_t1_head', 'in11'),
+            ('tpl_t2_head', 'in12'),
+            ('tpl_pseg', 'in13'),
+            ('tpl_dseg', 'in14'),
+            ('tpl_bmask', 'in15')
         ]),
+
         (deriv_file_list, deriv_sorter, [('out', 'file_list')]),
 
         # Create folder list and pass to sorter
         (inputs, deriv_folder_list, [
             ('melodic_out_dir', 'in1')
         ]),
-        (deriv_folder_list, deriv_sorter, [('out', 'folder_list')]),
 
-        # Copy individual templates/labels to atlas/ folder
-        (inputs, template_copy, [
-            ('tpl_t1_head', 'atlas.@t1'),
-            ('tpl_t2_head', 'atlas.@t2'),
-            ('tpl_pseg', 'atlas.@pseg'),
-            ('tpl_dseg', 'atlas.@dseg'),
-            ('tpl_bmask','atlas.@bmask')
-        ]),
+        (deriv_folder_list, deriv_sorter, [('out', 'folder_list')]),
 
     ])
 
