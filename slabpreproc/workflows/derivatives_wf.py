@@ -67,7 +67,7 @@ def build_derivatives_wf(deriv_dir):
 
     # Folder sorting dictionary list - needs separate Traits handling
     folder_sort_dicts = [
-        {'DataType': 'melodic', 'NewSuffix': 'melodic', 'FileType': 'Folder'}
+        {'DataType': 'melodic', 'NewSuffix': 'melodic.ica', 'FileType': 'Folder'}
     ]
 
     # Create a list of all file inputs
