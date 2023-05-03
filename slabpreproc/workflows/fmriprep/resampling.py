@@ -40,8 +40,13 @@ from nipype.pipeline import engine as pe
 from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 from niworkflows.interfaces.freesurfer import MedialNaNs
 
-from ...config import DEFAULT_MEMORY_MIN_GB
-from ...interfaces.metric import MetricDilate
+from ...interfaces.fmriprep.metric import MetricDilate
+
+if ty.TYPE_CHECKING:
+    from niworkflows.utils.spaces import SpatialReferences
+
+# Global from fmriprep/config.py
+DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_bold_surf_wf(
@@ -696,7 +701,7 @@ def init_bold_std_trans_wf(
     from niworkflows.interfaces.utility import KeySelect
     from niworkflows.utils.spaces import format_reference
 
-    from fmriprep.interfaces.maths import Clip
+    from ...interfaces.fmriprep.maths import Clip
 
     workflow = Workflow(name=name)
     output_references = spaces.cached.get_spaces(nonstandard=False, dim=(3,))
@@ -969,7 +974,7 @@ def init_bold_preproc_trans_wf(
     from niworkflows.interfaces.itk import MultiApplyTransforms
     from niworkflows.interfaces.nilearn import Merge
 
-    from fmriprep.interfaces.maths import Clip
+    from ...interfaces.fmriprep.maths import Clip
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
