@@ -7,3 +7,4 @@ nibabel~=5.0.0
 reportlab~=3.6.11
 nipype~=1.8.4
 templateflow~=23.0.0
+niworkflows~=1.6.2
