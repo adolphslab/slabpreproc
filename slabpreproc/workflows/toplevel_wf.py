@@ -34,8 +34,8 @@ import os
 
 from .qc_wf import build_qc_wf
 from .func_preproc_wf import build_func_preproc_wf
-from .func_surf_wf import build_func_surf_wf
 from .template_reg_wf import build_template_reg_wf
+from .surface_wf import build_surface_wf
 from .derivatives_wf import build_derivatives_wf
 from .melodic_wf import build_melodic_wf
 from ..interfaces.summaryreport import SummaryReport
@@ -66,6 +66,8 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
     inputs = pe.Node(
         util.IdentityInterface(
             fields=[
+                'subject_id',
+                'fs_subjects_dir',
                 'bold_mag',
                 'bold_mag_meta',
                 'sbref',
@@ -87,8 +89,8 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
 
     # Sub-workflows setup
     func_preproc_wf = build_func_preproc_wf(nthreads=nthreads)
-    func_surf_wf = build_func_surf_wf()
     template_reg_wf = build_template_reg_wf(nthreads=nthreads)
+    surface_wf = build_surface_wf()
     qc_wf = build_qc_wf(nthreads=nthreads)
     melodic_wf = build_melodic_wf(tr_s=tr_s)
     derivatives_wf = build_derivatives_wf(deriv_dir)
@@ -130,6 +132,10 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
             ('outputs.topup_b0_rads', 'inputs.topup_b0_rads')
         ]),
 
+        # Resample BOLD to fsnative cortical ribbon
+        (inputs, surface_wf, [('tpl_t1_head', 'inputnode.tpl_t1_head')]),
+        (template_reg_wf, surface_wf, [('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc')]),
+
         # Connect QC workflow
         (inputs, qc_wf, [
             ('bold_mag_meta', 'inputs.bold_mag_meta'),
@@ -144,6 +150,15 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
             ('outputs.tpl_seepi_unwarp_mean', 'inputs.tpl_mean_seepi'),
             ('outputs.tpl_sbref_preproc', 'inputs.tpl_bold_sbref'),
             ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
+        ]),
+
+        # Connect fMRIPrep BOLD to fsnative surface resampling workflow
+        (inputs, bold_surf_wf, [
+            ('subject_id', 'inputnode.subject_id'),
+            ('fs_subjects_dir', 'inputnode.subjects_dir')
+        ]),
+        (template_reg_wf, bold_surf_wf, [
+            ('outputs.tpl_bold_mag_preproc', 'inputnode.source_file'),
         ]),
 
         # Connect melodic workflow

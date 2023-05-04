@@ -39,10 +39,9 @@ SOFTWARE.
 from .workflows import build_toplevel_wf
 
 import os
+import os.path as op
 import sys
 import re
-import os.path as op
-from pathlib import Path
 import bids
 import argparse
 from templateflow import api as tflow
@@ -66,17 +65,23 @@ def main():
     args = parser.parse_args()
 
     # BIDS dataset directory
-    bids_dir = Path(op.abspath(args.bidsdir))
+    bids_dir = op.realpath(args.bidsdir)
 
     # Output derivatives folder
-    deriv_dir = bids_dir / 'derivatives' / 'slabpreproc'
-    os.makedirs(deriv_dir, exist_ok=True)
+    der_dir = op.join(bids_dir, 'derivatives')
+
+    # Slab preproc derivatives folder
+    slab_der_dir = op.join(der_dir, 'slabpreproc')
+    os.makedirs(slab_der_dir, exist_ok=True)
+
+    # Freesurfer subjects folder
+    fs_subjects_dir = op.join(der_dir, 'freesurfer')
 
     # Working directory
     if args.workdir:
-        work_dir = Path(args.workdir)
+        work_dir = op.realpath(args.workdir)
     else:
-        work_dir = Path(op.join(bids_dir, 'work'))
+        work_dir = op.join(bids_dir, 'work')
     os.makedirs(work_dir, exist_ok=True)
 
     # Set nipype debug mode and logging to work/ folder
@@ -183,7 +188,7 @@ def main():
 
         # Separate work folder for each BOLD image
         bold_stub = op.basename(bold_mag).split(".nii")[0]
-        this_work_dir = work_dir / bold_stub
+        this_work_dir = op.join(work_dir, bold_stub)
         os.makedirs(this_work_dir, exist_ok=True)
 
         #
@@ -221,9 +226,11 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        toplevel_wf = build_toplevel_wf(this_work_dir, deriv_dir, bold_mag_meta, args.nthreads)
+        toplevel_wf = build_toplevel_wf(this_work_dir, slab_der_dir, bold_mag_meta, args.nthreads)
 
         # Supply input images
+        toplevel_wf.inputs.inputs.subject_id = subj_id
+        toplevel_wf.inputs.inputs.fs_subjects_dir = fs_subjects_dir
         toplevel_wf.inputs.inputs.bold_mag = bold_mag_path
         toplevel_wf.inputs.inputs.bold_mag_meta = bold_mag_meta
         toplevel_wf.inputs.inputs.sbref = sbref_path
