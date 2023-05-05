@@ -235,20 +235,20 @@ def main():
         toplevel_wf = build_toplevel_wf(this_work_dir, slab_der_dir, bold_mag_meta, args.nthreads)
 
         # Supply input images
-        toplevel_wf.inputs.inputs.subject_id = subj_id
-        toplevel_wf.inputs.inputs.fs_subjects_dir = fs_subjects_dir
-        toplevel_wf.inputs.inputs.bold_mag = bold_mag_path
-        toplevel_wf.inputs.inputs.bold_mag_meta = bold_mag_meta
-        toplevel_wf.inputs.inputs.sbref = sbref_path
-        toplevel_wf.inputs.inputs.sbref_meta = sbref_meta
-        toplevel_wf.inputs.inputs.seepis = fmap_paths
-        toplevel_wf.inputs.inputs.seepis_meta = fmap_metas
-        toplevel_wf.inputs.inputs.tpl_t1w_head = tpl_t1w_head_path
-        toplevel_wf.inputs.inputs.tpl_t2w_head = tpl_t2w_head_path
-        toplevel_wf.inputs.inputs.tpl_pseg = tpl_pseg_path
-        toplevel_wf.inputs.inputs.tpl_dseg = tpl_dseg_path
-        toplevel_wf.inputs.inputs.tpl_bmask = tpl_bmask_path
-        toplevel_wf.inputs.inputs.fs_t1w_head = fs_t1w_head_path
+        toplevel_wf.inputs.inputnode.subject_id = subj_id
+        toplevel_wf.inputs.inputnode.fs_subjects_dir = fs_subjects_dir
+        toplevel_wf.inputs.inputnode.bold_mag = bold_mag_path
+        toplevel_wf.inputs.inputnode.bold_mag_meta = bold_mag_meta
+        toplevel_wf.inputs.inputnode.sbref = sbref_path
+        toplevel_wf.inputs.inputnode.sbref_meta = sbref_meta
+        toplevel_wf.inputs.inputnode.seepis = fmap_paths
+        toplevel_wf.inputs.inputnode.seepis_meta = fmap_metas
+        toplevel_wf.inputs.inputnode.tpl_t1w_head = tpl_t1w_head_path
+        toplevel_wf.inputs.inputnode.tpl_t2w_head = tpl_t2w_head_path
+        toplevel_wf.inputs.inputnode.tpl_pseg = tpl_pseg_path
+        toplevel_wf.inputs.inputnode.tpl_dseg = tpl_dseg_path
+        toplevel_wf.inputs.inputnode.tpl_bmask = tpl_bmask_path
+        toplevel_wf.inputs.inputnode.fs_t1w_head = fs_t1w_head_path
 
         # Run workflow
         # Workflow outputs are stored in a BIDS derivatives folder

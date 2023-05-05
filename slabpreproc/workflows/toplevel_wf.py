@@ -63,7 +63,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
     """
 
     # Input node setup
-    inputs = pe.Node(
+    inputnode = pe.Node(
         util.IdentityInterface(
             fields=[
                 'subject_id',
@@ -78,10 +78,11 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
                 'tpl_t2w_head',
                 'tpl_pseg',
                 'tpl_dseg',
-                'tpl_bmask'
+                'tpl_bmask',
+                'fs_t1w_head'
             ]
         ),
-        name='inputs'
+        name='inputnode'
     )
 
     # Extract TR in seconds from metadata for melodic
@@ -111,7 +112,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
     toplevel_wf.connect([
 
         # Func preproc inputs
-        (inputs, func_preproc_wf, [
+        (inputnode, func_preproc_wf, [
             ('bold_mag', 'inputs.bold_mag'),
             ('bold_mag_meta', 'inputs.bold_mag_meta'),
             ('sbref', 'inputs.sbref'),
@@ -121,7 +122,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
         ]),
 
         # Pass T2w individual template to registration workflow
-        (inputs, template_reg_wf, [('tpl_t2_head', 'inputs.tpl_t2_head')]),
+        (inputnode, template_reg_wf, [('tpl_t2w_head', 'inputs.tpl_t2w_head')]),
 
         # Pass preprocessed (motion and distortion corrected) BOLD and SBRef images
         # to template registration workflow
@@ -133,7 +134,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
         ]),
 
         # Connect QC workflow
-        (inputs, qc_wf, [
+        (inputnode, qc_wf, [
             ('bold_mag_meta', 'inputs.bold_mag_meta'),
             ('tpl_dseg', 'inputs.tpl_dseg'),
             ('tpl_bmask', 'inputs.tpl_bmask')
@@ -149,23 +150,24 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
         ]),
 
         # Resample BOLD to fsnative cortical ribbon
-        (inputs, surface_wf, [
+        (inputnode, surface_wf, [
             ('subject_id', 'inputnode.subject_id'),
             ('fs_subjects_dir', 'inputnode.fs_subjects_dir'),
-            ('tpl_t1w_head', 'inputnode.tpl_t1w_head')
+            ('tpl_t1w_head', 'inputnode.tpl_t1w_head'),
+            ('fs_t1w_head', 'inputnode.fs_t1w_head')
         ]),
         (template_reg_wf, surface_wf, [('outputs.tpl_bold_mag_preproc', 'inputnode.tpl_bold')]),
 
         # Connect melodic workflow
         (template_reg_wf, melodic_wf, [('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc')]),
-        (inputs, melodic_wf, [
+        (inputnode, melodic_wf, [
             ('tpl_t1w_head', 'inputs.tpl_t1w_head'),
             ('tpl_bmask', 'inputs.tpl_bmask')
         ]),
         (qc_wf, melodic_wf, [('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean')]),
 
         # Connect derivatives outputs
-        (inputs, derivatives_wf, [('bold_mag', 'inputs.source_file')]),
+        (inputnode, derivatives_wf, [('bold_mag', 'inputs.source_file')]),
 
         # Write individual template-space results to derivatives folder
         (template_reg_wf, derivatives_wf, [
@@ -191,20 +193,20 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
         ]),
 
         # Write atlas images and templates to derivatives folder
-        (inputs, derivatives_wf, [
-            ('tpl_t1_head', 'inputs.tpl_t1_head'),
-            ('tpl_t2_head', 'inputs.tpl_t2_head'),
+        (inputnode, derivatives_wf, [
+            ('tpl_t1w_head', 'inputs.tpl_t1w_head'),
+            ('tpl_t2w_head', 'inputs.tpl_t2w_head'),
             ('tpl_pseg', 'inputs.tpl_pseg'),
             ('tpl_dseg', 'inputs.tpl_dseg'),
             ('tpl_bmask', 'inputs.tpl_bmask')
         ]),
 
         # Summary report
-        (inputs, summary_report, [
+        (inputnode, summary_report, [
             ('bold_mag', 'source_bold'),
             ('bold_mag_meta', 'source_bold_meta'),
-            ('tpl_t1_head', 't1head'),
-            ('tpl_t2_head', 't2head'),
+            ('tpl_t1w_head', 't1w_head'),
+            ('tpl_t2w_head', 't2w_head'),
             ('tpl_dseg', 'labels'),
         ]),
         (template_reg_wf, summary_report, [

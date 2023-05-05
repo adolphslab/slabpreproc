@@ -26,7 +26,7 @@ def build_template_reg_wf(nthreads=2):
                 'bold_mag_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
-                'tpl_t2_head',
+                'tpl_t2w_head',
                 'topup_b0_rads'
             ]
         ),
@@ -120,34 +120,34 @@ def build_template_reg_wf(nthreads=2):
         # FLIRT register unwarped SE-EPI midspace to individual template space
         (inputs, flirt_seepi_tpl, [
             ('seepi_unwarp_mean', 'in_file'),
-            ('tpl_t2_head', 'reference'),
+            ('tpl_t2w_head', 'reference'),
         ]),
 
         # Convert FLIRT transform to ITK
         (flirt_seepi_tpl, fsl2itk, [('out_matrix_file', 'transform_file')]),
         (inputs, fsl2itk, [
             ('seepi_unwarp_mean', 'source_file'),
-            ('tpl_t2_head', 'reference_file'),
+            ('tpl_t2w_head', 'reference_file'),
         ]),
 
         # Resample unwarped SE-EPI midspace to template space
         (inputs, resamp_seepi_tpl, [('seepi_unwarp_mean', 'input_image')]),
-        (inputs, resamp_seepi_tpl, [('tpl_t2_head', 'reference_image')]),
+        (inputs, resamp_seepi_tpl, [('tpl_t2w_head', 'reference_image')]),
         (fsl2itk, resamp_seepi_tpl, [('itk_transform', 'transforms')]),
 
         # Resample unwarped SBref to template space
         (inputs, resamp_sbref_tpl, [('sbref_preproc', 'input_image')]),
-        (inputs, resamp_sbref_tpl, [('tpl_t2_head', 'reference_image')]),
+        (inputs, resamp_sbref_tpl, [('tpl_t2w_head', 'reference_image')]),
         (fsl2itk, resamp_sbref_tpl, [('itk_transform', 'transforms')]),
 
         # Resample TOPUP B0 estimate to template space
         (inputs, resamp_b0_tpl, [('topup_b0_rads', 'input_image')]),
-        (inputs, resamp_b0_tpl, [('tpl_t2_head', 'reference_image')]),
+        (inputs, resamp_b0_tpl, [('tpl_t2w_head', 'reference_image')]),
         (fsl2itk, resamp_b0_tpl, [('itk_transform', 'transforms')]),
 
         # Resample unwarped BOLD to template space
         (inputs, resamp_bold_tpl, [('bold_mag_preproc', 'input_image')]),
-        (inputs, resamp_bold_tpl, [('tpl_t2_head', 'reference_image')]),
+        (inputs, resamp_bold_tpl, [('tpl_t2w_head', 'reference_image')]),
         (fsl2itk, resamp_bold_tpl, [('itk_transform', 'transforms')]),
 
         # Output results

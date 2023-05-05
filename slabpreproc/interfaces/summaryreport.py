@@ -44,13 +44,13 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
-    t1head = File(
+    t1w_head = File(
         desc='Individual T1w template head',
         exists=True,
         mandatory=True
     )
 
-    t2head = File(
+    t2w_head = File(
         desc='Individual T2w template head',
         exists=True,
         mandatory=True
@@ -109,8 +109,8 @@ class SummaryReport(BaseInterface):
         # Construct dictionary of required files to pass to ReportPDF
         report_files = {
             'SourceBOLD': self.inputs.source_bold,
-            'T1Head': self.inputs.t1head,
-            'T2Head': self.inputs.t2head,
+            'T1wHead': self.inputs.t1w_head,
+            'T2wHead': self.inputs.t2w_head,
             'Labels': self.inputs.labels,
             'mSEEPI': self.inputs.mseepi,
             'tMean': self.inputs.tmean,

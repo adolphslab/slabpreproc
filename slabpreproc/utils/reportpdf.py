@@ -234,11 +234,11 @@ class ReportPDF:
         zlims = graphics.crop_to_slab(self._report_files['mSEEPI'])
 
         self._section_title('Anatomic Templates', page_break=True)
-        self._add_montage(img_name='T1Head', title='T1w Head', colormap='gray', zlims=zlims)
-        self._add_montage(img_name='T2Head', title='T2w Head', colormap='gray', zlims=zlims)
+        self._add_montage(img_name='T1wHead', title='T1w Head', colormap='gray', zlims=zlims)
+        self._add_montage(img_name='T2wHead', title='T2w Head', colormap='gray', zlims=zlims)
 
         self._section_title('Atlas Labels', page_break=True)
-        self._add_montage(img_name='Labels', under_name='T1Head',
+        self._add_montage(img_name='Labels', under_name='T1wHead',
                           title='Atlas Labels', colormap='rainbow', zlims=zlims, scaling='default')
 
         self._section_title('Preprocessed EPI', page_break=True)
