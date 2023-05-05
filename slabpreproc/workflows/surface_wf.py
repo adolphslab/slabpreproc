@@ -26,7 +26,7 @@ def build_surface_wf():
             fields=[
                 'fs_subjects_dir',
                 'subject_id',
-                'tpl_bold'
+                'tpl_bold',
                 'tpl_t1w_head',
                 'fs_t1w_head'
             ]
@@ -55,14 +55,14 @@ def build_surface_wf():
     surface_wf.connect([
 
         # Construct transform from FreeSurfer conformed image to
-        (inputnode, tpl2fsnative_xfm, [('tpl_t1w', 'source_file')]),
-        (inputnode, tpl2fsnative_xfm, [('fs_t1w', 'target_file')]),
+        (inputnode, tpl2fsnative_xfm, [('tpl_t1w_head', 'source_file')]),
+        (inputnode, tpl2fsnative_xfm, [('fs_t1w_head', 'target_file')]),
         (inputnode, bold_surf_wf, [
             ('fs_subjects_dir', 'inputnode.subjects_dir'),
             ('subject_id', 'inputnode.subject_id'),
             ('tpl_bold', 'inputnode.source_file')
         ]),
-        (tpl2fsnative_xfm, bold_surf_wf, [('out_reg_file', 't1w2fsnative_xfm')]),
+        (tpl2fsnative_xfm, bold_surf_wf, [('out_reg_file', 'inputnode.t1w2fsnative_xfm')]),
         (bold_surf_wf, outputnode, [('outputnode.surfaces', 'surfaces')]),
     ])
 

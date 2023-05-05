@@ -16,7 +16,7 @@ def build_melodic_wf(tr_s=1.0):
             fields=[
                 'tpl_bold_mag_preproc',
                 'tpl_bold_tmean',
-                'tpl_t1_head',
+                'tpl_t1w_head',
                 'tpl_bmask',
                 'bold_mag_meta'
             ]
@@ -53,7 +53,7 @@ def build_melodic_wf(tr_s=1.0):
             ('tpl_bmask', 'bmask')
         ]),
         (inputs, melodic, [
-            ('tpl_t1_head', 'bg_image'),
+            ('tpl_t1w_head', 'bg_image'),
             ('tpl_bold_mag_preproc', 'in_files'),
         ]),
         (melmask, melodic, [('melmask', 'mask')]),

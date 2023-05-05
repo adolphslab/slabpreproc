@@ -74,8 +74,8 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
                 'sbref_meta',
                 'seepis',
                 'seepis_meta',
-                'tpl_t1_head',
-                'tpl_t2_head',
+                'tpl_t1w_head',
+                'tpl_t2w_head',
                 'tpl_pseg',
                 'tpl_dseg',
                 'tpl_bmask'
@@ -132,10 +132,6 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
             ('outputs.topup_b0_rads', 'inputs.topup_b0_rads')
         ]),
 
-        # Resample BOLD to fsnative cortical ribbon
-        (inputs, surface_wf, [('tpl_t1_head', 'inputnode.tpl_t1_head')]),
-        (template_reg_wf, surface_wf, [('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc')]),
-
         # Connect QC workflow
         (inputs, qc_wf, [
             ('bold_mag_meta', 'inputs.bold_mag_meta'),
@@ -152,31 +148,24 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
             ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
         ]),
 
-        # Connect fMRIPrep BOLD to fsnative surface resampling workflow
-        (inputs, bold_surf_wf, [
+        # Resample BOLD to fsnative cortical ribbon
+        (inputs, surface_wf, [
             ('subject_id', 'inputnode.subject_id'),
-            ('fs_subjects_dir', 'inputnode.subjects_dir')
+            ('fs_subjects_dir', 'inputnode.fs_subjects_dir'),
+            ('tpl_t1w_head', 'inputnode.tpl_t1w_head')
         ]),
-        (template_reg_wf, bold_surf_wf, [
-            ('outputs.tpl_bold_mag_preproc', 'inputnode.source_file'),
-        ]),
+        (template_reg_wf, surface_wf, [('outputs.tpl_bold_mag_preproc', 'inputnode.tpl_bold')]),
 
         # Connect melodic workflow
-        (template_reg_wf, melodic_wf, [
-            ('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc'),
-        ]),
+        (template_reg_wf, melodic_wf, [('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc')]),
         (inputs, melodic_wf, [
-            ('tpl_t1_head', 'inputs.tpl_t1_head'),
+            ('tpl_t1w_head', 'inputs.tpl_t1w_head'),
             ('tpl_bmask', 'inputs.tpl_bmask')
         ]),
-        (qc_wf, melodic_wf, [
-            ('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean'),
-        ]),
+        (qc_wf, melodic_wf, [('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean')]),
 
         # Connect derivatives outputs
-        (inputs, derivatives_wf, [
-            ('bold_mag', 'inputs.source_file'),
-        ]),
+        (inputs, derivatives_wf, [('bold_mag', 'inputs.source_file')]),
 
         # Write individual template-space results to derivatives folder
         (template_reg_wf, derivatives_wf, [

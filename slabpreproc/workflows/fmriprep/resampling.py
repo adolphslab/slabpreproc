@@ -1,6 +1,7 @@
 # Resample motion corrected, unwarped BOLD data to fsnative cortical ribbon surface
 # - average through cortical ribbon thickness
 # - remove unused medial NaN and goodvoxels code
+# - remove additional functions unused for FS surface resampling
 #
 # AUTHOR : Mike Tyszka
 # PLACE  : Caltech Brain Imaging Center
@@ -42,6 +43,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_bold_surf_wf(
+    *,
     mem_gb: float,
     surface_spaces: ty.List[str],
     name: str = "bold_surf_wf",
@@ -201,32 +203,6 @@ def init_bold_surf_wf(
 def _split_spec(in_target):
     space, spec = in_target
     template = space.split(":")[0]
-    return space, template, spec
-
-
-def _select_template(template):
-    from niworkflows.utils.misc import get_template_specs
-
-    template, specs = template
-    template = template.split(":")[0]  # Drop any cohort modifier if present
-    specs = specs.copy()
-    specs["suffix"] = specs.get("suffix", "T1w")
-
-    # Sanitize resolution
-    res = specs.pop("res", None) or specs.pop("resolution", None) or "native"
-    if res != "native":
-        specs["resolution"] = res
-        return get_template_specs(template, template_spec=specs)[0]
-
-    # Map nonstandard resolutions to existing resolutions
-    specs["resolution"] = 2
-    try:
-        out = get_template_specs(template, template_spec=specs)
-    except RuntimeError:
-        specs["resolution"] = 1
-        out = get_template_specs(template, template_spec=specs)
-
-    return out[0]
 
 
 def _itk2lta(in_file, src_file, dst_file):

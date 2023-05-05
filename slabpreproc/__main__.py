@@ -116,19 +116,19 @@ def main():
     # Get T1 and T2 templates and subcortical labels from templateflow repo
     # Individual custom templates and labels must have been set up in
     # the TemplateFlow cache directory (typically $(HOME)/.cache/templateflow
-    tpl_t1_head_path = tflow.get(
+    tpl_t1w_head_path = tflow.get(
         subj_id, desc=None, resolution=2,
         suffix='T1w', extension='nii.gz'
     )
-    if not tpl_t1_head_path:
+    if not tpl_t1w_head_path:
         print(f'* Could not find T1w head template  - exiting')
         sys.exit(1)
 
-    tpl_t2_head_path = tflow.get(
+    tpl_t2w_head_path = tflow.get(
         subj_id, desc=None, resolution=2,
         suffix='T2w', extension='nii.gz'
     )
-    if not tpl_t2_head_path:
+    if not tpl_t2w_head_path:
         print(f'* Could not find T2w head template - exiting')
         sys.exit(1)
 
@@ -154,6 +154,12 @@ def main():
     )
     if not tpl_bmask_path:
         print(f'* Could not find template brain mask - exiting')
+        sys.exit(1)
+
+    # Find the associated fsnative T1.mgz
+    fs_t1w_head_path = op.join(fs_subjects_dir, subj_id, 'mri', 'T1.mgz')
+    if not op.isfile(fs_t1w_head_path):
+        print(f'* Could not find fsnative T1w head image - exiting')
         sys.exit(1)
 
     # Construct BIDS layout object for this dataset
@@ -237,11 +243,12 @@ def main():
         toplevel_wf.inputs.inputs.sbref_meta = sbref_meta
         toplevel_wf.inputs.inputs.seepis = fmap_paths
         toplevel_wf.inputs.inputs.seepis_meta = fmap_metas
-        toplevel_wf.inputs.inputs.tpl_t1_head = tpl_t1_head_path
-        toplevel_wf.inputs.inputs.tpl_t2_head = tpl_t2_head_path
+        toplevel_wf.inputs.inputs.tpl_t1w_head = tpl_t1w_head_path
+        toplevel_wf.inputs.inputs.tpl_t2w_head = tpl_t2w_head_path
         toplevel_wf.inputs.inputs.tpl_pseg = tpl_pseg_path
         toplevel_wf.inputs.inputs.tpl_dseg = tpl_dseg_path
         toplevel_wf.inputs.inputs.tpl_bmask = tpl_bmask_path
+        toplevel_wf.inputs.inputs.fs_t1w_head = fs_t1w_head_path
 
         # Run workflow
         # Workflow outputs are stored in a BIDS derivatives folder
