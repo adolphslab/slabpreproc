@@ -134,7 +134,7 @@ def main():
 
     tpl_t1w_brain_path = tflow.get(
         subj_id, desc='brain', resolution=2,
-        dsuffix='T1w', extension='nii.gz'
+        suffix='T1w', extension='nii.gz'
     )
     if not tpl_t1w_brain_path:
         print(f'* Could not find T1w brain template  - exiting')
