@@ -200,11 +200,6 @@ def init_bold_surf_wf(
     return workflow
 
 
-def _split_spec(in_target):
-    space, spec = in_target
-    template = space.split(":")[0]
-
-
 def _itk2lta(in_file, src_file, dst_file):
     from pathlib import Path
 

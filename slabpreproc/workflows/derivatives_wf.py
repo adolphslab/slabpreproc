@@ -37,6 +37,8 @@ def build_derivatives_wf(deriv_dir):
                 'motion_csv',
                 'tpl_t1w_head',
                 'tpl_t2w_head',
+                'tpl_t1w_brain',
+                'tpl_t2w_brain',
                 'tpl_pseg',
                 'tpl_dseg',
                 'tpl_bmask',
@@ -58,6 +60,8 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'qc', 'NewSuffix': 'recon-topup_fieldmap', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-topup_dropout', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-motion_pars', 'FileType': 'CSV'},
+        {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
+        {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
         {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
         {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
         {'DataType': 'atlas', 'NewSuffix': '', 'FileType': 'Image'},
@@ -113,9 +117,11 @@ def build_derivatives_wf(deriv_dir):
             ('motion_csv', 'in10'),
             ('tpl_t1w_head', 'in11'),
             ('tpl_t2w_head', 'in12'),
-            ('tpl_pseg', 'in13'),
-            ('tpl_dseg', 'in14'),
-            ('tpl_bmask', 'in15')
+            ('tpl_t1w_brain', 'in13'),
+            ('tpl_t2w_brain', 'in14'),
+            ('tpl_pseg', 'in15'),
+            ('tpl_dseg', 'in16'),
+            ('tpl_bmask', 'in17')
         ]),
 
         (deriv_file_list, deriv_sorter, [('out', 'file_list')]),

@@ -35,9 +35,12 @@ import os
 from .qc_wf import build_qc_wf
 from .func_preproc_wf import build_func_preproc_wf
 from .template_reg_wf import build_template_reg_wf
-from .surface_wf import build_surface_wf
 from .derivatives_wf import build_derivatives_wf
 from .melodic_wf import build_melodic_wf
+
+# WIP
+# from .surface_wf import build_surface_wf
+
 from ..interfaces.summaryreport import SummaryReport
 
 import nipype.interfaces.utility as util
@@ -76,6 +79,8 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
                 'seepis_meta',
                 'tpl_t1w_head',
                 'tpl_t2w_head',
+                'tpl_t1w_brain',
+                'tpl_t2w_brain',
                 'tpl_pseg',
                 'tpl_dseg',
                 'tpl_bmask',
@@ -91,10 +96,12 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
     # Sub-workflows setup
     func_preproc_wf = build_func_preproc_wf(nthreads=nthreads)
     template_reg_wf = build_template_reg_wf(nthreads=nthreads)
-    surface_wf = build_surface_wf()
     qc_wf = build_qc_wf(nthreads=nthreads)
     melodic_wf = build_melodic_wf(tr_s=tr_s)
     derivatives_wf = build_derivatives_wf(deriv_dir)
+
+    # WIP
+    # surface_wf = build_surface_wf()
 
     # Summary report node
     summary_report = pe.Node(
@@ -149,14 +156,15 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
             ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
         ]),
 
+        # WIP
         # Resample BOLD to fsnative cortical ribbon
-        (inputnode, surface_wf, [
-            ('subject_id', 'inputnode.subject_id'),
-            ('fs_subjects_dir', 'inputnode.fs_subjects_dir'),
-            ('tpl_t1w_head', 'inputnode.tpl_t1w_head'),
-            ('fs_t1w_head', 'inputnode.fs_t1w_head')
-        ]),
-        (template_reg_wf, surface_wf, [('outputs.tpl_bold_mag_preproc', 'inputnode.tpl_bold')]),
+        # (inputnode, surface_wf, [
+        #     ('subject_id', 'inputnode.subject_id'),
+        #     ('fs_subjects_dir', 'inputnode.fs_subjects_dir'),
+        #     ('tpl_t1w_head', 'inputnode.tpl_t1w_head'),
+        #     ('fs_t1w_head', 'inputnode.fs_t1w_head')
+        # ]),
+        # (template_reg_wf, surface_wf, [('outputs.tpl_bold_mag_preproc', 'inputnode.tpl_bold')]),
 
         # Connect melodic workflow
         (template_reg_wf, melodic_wf, [('outputs.tpl_bold_mag_preproc', 'inputs.tpl_bold_mag_preproc')]),
@@ -177,6 +185,9 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
             ('outputs.tpl_b0_rads', 'inputs.tpl_b0_rads')
         ]),
 
+        # Write fsnative surface resampled BOLD to derivatives
+        # (surface_wf, derivatives_wf, ['outputnode.surfaces', 'inputnode.']),
+
         # Write QC results to derivatives folder
         (qc_wf, derivatives_wf, [
             ('outputs.tpl_bold_tmean', 'inputs.tpl_bold_tmean'),
@@ -196,6 +207,8 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
         (inputnode, derivatives_wf, [
             ('tpl_t1w_head', 'inputs.tpl_t1w_head'),
             ('tpl_t2w_head', 'inputs.tpl_t2w_head'),
+            ('tpl_t1w_brain', 'inputs.tpl_t1w_brain'),
+            ('tpl_t2w_brain', 'inputs.tpl_t2w_brain'),
             ('tpl_pseg', 'inputs.tpl_pseg'),
             ('tpl_dseg', 'inputs.tpl_dseg'),
             ('tpl_bmask', 'inputs.tpl_bmask')

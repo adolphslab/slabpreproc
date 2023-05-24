@@ -132,6 +132,22 @@ def main():
         print(f'* Could not find T2w head template - exiting')
         sys.exit(1)
 
+    tpl_t1w_brain_path = tflow.get(
+        subj_id, desc='brain', resolution=2,
+        dsuffix='T1w', extension='nii.gz'
+    )
+    if not tpl_t1w_brain_path:
+        print(f'* Could not find T1w brain template  - exiting')
+        sys.exit(1)
+
+    tpl_t2w_brain_path = tflow.get(
+        subj_id, desc='brain', resolution=2,
+        suffix='T2w', extension='nii.gz'
+    )
+    if not tpl_t2w_brain_path:
+        print(f'* Could not find T2w brain template - exiting')
+        sys.exit(1)
+
     tpl_pseg_path = tflow.get(
         subj_id, desc='subcort', resolution=2,
         suffix='pseg', extension='nii.gz'
@@ -245,6 +261,8 @@ def main():
         toplevel_wf.inputs.inputnode.seepis_meta = fmap_metas
         toplevel_wf.inputs.inputnode.tpl_t1w_head = tpl_t1w_head_path
         toplevel_wf.inputs.inputnode.tpl_t2w_head = tpl_t2w_head_path
+        toplevel_wf.inputs.inputnode.tpl_t1w_brain = tpl_t1w_brain_path
+        toplevel_wf.inputs.inputnode.tpl_t2w_brain = tpl_t2w_brain_path
         toplevel_wf.inputs.inputnode.tpl_pseg = tpl_pseg_path
         toplevel_wf.inputs.inputnode.tpl_dseg = tpl_dseg_path
         toplevel_wf.inputs.inputnode.tpl_bmask = tpl_bmask_path
