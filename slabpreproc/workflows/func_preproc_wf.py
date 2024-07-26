@@ -16,9 +16,9 @@ from ..interfaces import SEEPIRef
 # from niworkflows.interfaces.itk import MCFLIRT2ITK
 
 
-def build_func_preproc_wf(nthreads=2):
+def build_func_preproc_wf(antsthreads=2):
     """
-    :param nthreads: int
+    :param antsthreads: int
         Maximum number of threads allowed
     :return:
     """
@@ -45,7 +45,7 @@ def build_func_preproc_wf(nthreads=2):
     sbref2seepi = pe.Node(
         ants.RegistrationSynQuick(
             transform_type='r',
-            num_threads=nthreads
+            num_threads=antsthreads
         ),
         name='sbref2seepi',
         terminal_output=None
@@ -94,6 +94,7 @@ def build_func_preproc_wf(nthreads=2):
     # registration of EPI to individual T2w space
     topup_est = pe.Node(
         fsl.TOPUP(
+            fwhm=4,
             output_type='NIFTI_GZ'
         ),
         name='topup_est'

@@ -18,11 +18,9 @@ from ..interfaces.motion import Motion
 from ..interfaces.dropout import Dropout
 
 
-def build_qc_wf(nthreads=2):
+def build_qc_wf():
     """
-    :param nthreads: int
-        Maximum number of threads allowed
-    :return:
+    Build quality control workflow
     """
 
     # QC inputs

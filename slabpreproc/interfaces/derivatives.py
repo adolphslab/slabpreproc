@@ -153,15 +153,16 @@ class DerivativesSorter(BaseInterface):
             print(f'  to {out_pname}')
             shutil.copytree(in_dname, out_pname, dirs_exist_ok=True)
 
+            # 2024-07-25 JMT Skip aux file removal - rmtree throwing errors for melodic _report tree
             # Remove all Nipype auxiliary files from output folder ('_*' and '*.pklz')
-            fnames = glob(op.join(out_pname, '_*')) + glob(op.join(out_pname, '*.pklz'))
-            for fname in fnames:
-                if op.isfile(fname):
-                    os.remove(fname)
-                elif op.isdir(fname):
-                    shutil.rmtree(fname)
-                else:
-                    pass
+            # fnames = glob(op.join(out_pname, '_*')) + glob(op.join(out_pname, '*.pklz'))
+            # for fname in fnames:
+            #     if op.isfile(fname):
+            #         os.remove(fname)
+            #     elif op.isdir(fname):
+            #         shutil.rmtree(fname)
+            #     else:
+            #         pass
 
         return runtime
 

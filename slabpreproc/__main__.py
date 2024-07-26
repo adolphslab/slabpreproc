@@ -57,8 +57,8 @@ def main():
     parser.add_argument('-w', '--workdir', help='Work directory')
     parser.add_argument('--sub', required=True, help='Subject ID without sub- prefix')
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
-    parser.add_argument('--nthreads', required=False, type=int, default=2, choices=range(1, 8),
-                        help="Max number of threads")
+    parser.add_argument('--antsthreads', required=False, type=int, default=2, choices=range(1, 9),
+                        help="Max number of threads allowed for ANTs/ITK modules")
     parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
 
     # Parse command line arguments
@@ -106,12 +106,12 @@ def main():
 
     # Summary splash text
     print('Slab fMRI Preprocessing Pipeline')
-    print(f'BIDS directory : {bids_dir}')
-    print(f'Work directory : {work_dir}')
-    print(f'Subject ID     : {subj_id}')
-    print(f'Session ID     : {sess_id}')
-    print(f'Max threads    : {args.nthreads}')
-    print(f'Debug mode     : {args.debug}')
+    print(f'BIDS directory   : {bids_dir}')
+    print(f'Work directory   : {work_dir}')
+    print(f'Subject ID       : {subj_id}')
+    print(f'Session ID       : {sess_id}')
+    print(f'Max ANTs threads : {args.antsthreads}')
+    print(f'Debug mode       : {args.debug}')
 
     # Get T1 and T2 templates and subcortical labels from templateflow repo
     # Individual custom templates and labels must have been set up in
@@ -124,12 +124,13 @@ def main():
         print(f'* Could not find T1w head template  - exiting')
         sys.exit(1)
 
-    tpl_t2w_head_path = tflow.get(
-        subj_id, desc=None, resolution=2,
+    # Use T2w EPI template derived from whole head SE-EPI fieldmap images
+    tpl_t2epi_head_path = tflow.get(
+        subj_id, desc='epi', resolution=2,
         suffix='T2w', extension='nii.gz'
     )
-    if not tpl_t2w_head_path:
-        print(f'* Could not find T2w head template - exiting')
+    if not tpl_t2epi_head_path:
+        print(f'* Could not find T2w EPI head template - exiting')
         sys.exit(1)
 
     tpl_t1w_brain_path = tflow.get(
@@ -248,7 +249,7 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        toplevel_wf = build_toplevel_wf(this_work_dir, slab_der_dir, bold_mag_meta, args.nthreads)
+        toplevel_wf = build_toplevel_wf(this_work_dir, slab_der_dir, bold_mag_meta, args.antsthreads)
 
         # Supply input images
         toplevel_wf.inputs.inputnode.subject_id = subj_id
@@ -260,7 +261,7 @@ def main():
         toplevel_wf.inputs.inputnode.seepis = fmap_paths
         toplevel_wf.inputs.inputnode.seepis_meta = fmap_metas
         toplevel_wf.inputs.inputnode.tpl_t1w_head = tpl_t1w_head_path
-        toplevel_wf.inputs.inputnode.tpl_t2w_head = tpl_t2w_head_path
+        toplevel_wf.inputs.inputnode.tpl_t2w_head = tpl_t2epi_head_path
         toplevel_wf.inputs.inputnode.tpl_t1w_brain = tpl_t1w_brain_path
         toplevel_wf.inputs.inputnode.tpl_t2w_brain = tpl_t2w_brain_path
         toplevel_wf.inputs.inputnode.tpl_pseg = tpl_pseg_path

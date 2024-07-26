@@ -50,7 +50,7 @@ import nipype.pipeline.engine as pe
 # config.enable_debug_mode()
 
 
-def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
+def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, antsthreads=2):
     """
     Build main subcortical QC workflow
 
@@ -60,7 +60,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
         Path to derivatives directory
     :param bold_mag_meta: dict
         BOLD magnitude image metadata
-    :param nthreads: int
+    :param antsthreads: int
         Maximum number of threads allowed
     :return:
     """
@@ -78,7 +78,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
                 'seepis',
                 'seepis_meta',
                 'tpl_t1w_head',
-                'tpl_t2w_head',
+                'tpl_t2epi_head',
                 'tpl_t1w_brain',
                 'tpl_t2w_brain',
                 'tpl_pseg',
@@ -94,9 +94,9 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
     tr_s = bold_mag_meta['RepetitionTime']
 
     # Sub-workflows setup
-    func_preproc_wf = build_func_preproc_wf(nthreads=nthreads)
-    template_reg_wf = build_template_reg_wf(nthreads=nthreads)
-    qc_wf = build_qc_wf(nthreads=nthreads)
+    func_preproc_wf = build_func_preproc_wf(antsthreads=antsthreads)
+    template_reg_wf = build_template_reg_wf(antsthreads=antsthreads)
+    qc_wf = build_qc_wf()
     melodic_wf = build_melodic_wf(tr_s=tr_s)
     derivatives_wf = build_derivatives_wf(deriv_dir)
 
@@ -129,7 +129,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
         ]),
 
         # Pass T2w individual template to registration workflow
-        (inputnode, template_reg_wf, [('tpl_t2w_head', 'inputs.tpl_t2w_head')]),
+        (inputnode, template_reg_wf, [('tpl_t2epi_head', 'inputs.tpl_t2epi_head')]),
 
         # Pass preprocessed (motion and distortion corrected) BOLD and SBRef images
         # to template registration workflow
@@ -206,7 +206,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
         # Write atlas images and templates to derivatives folder
         (inputnode, derivatives_wf, [
             ('tpl_t1w_head', 'inputs.tpl_t1w_head'),
-            ('tpl_t2w_head', 'inputs.tpl_t2w_head'),
+            ('tpl_t2epi_head', 'inputs.tpl_t2epi_head'),
             ('tpl_t1w_brain', 'inputs.tpl_t1w_brain'),
             ('tpl_t2w_brain', 'inputs.tpl_t2w_brain'),
             ('tpl_pseg', 'inputs.tpl_pseg'),
@@ -219,7 +219,7 @@ def build_toplevel_wf(work_dir, deriv_dir, bold_mag_meta, nthreads=2):
             ('bold_mag', 'source_bold'),
             ('bold_mag_meta', 'source_bold_meta'),
             ('tpl_t1w_head', 't1w_head'),
-            ('tpl_t2w_head', 't2w_head'),
+            ('tpl_t2epi_head', 't2w_head'),
             ('tpl_dseg', 'labels'),
         ]),
         (template_reg_wf, summary_report, [

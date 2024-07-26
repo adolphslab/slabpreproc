@@ -12,10 +12,10 @@ import nipype.interfaces.c3 as c3
 import nipype.pipeline.engine as pe
 
 
-def build_template_reg_wf(nthreads=2):
+def build_template_reg_wf(antsthreads=2):
     """
-    :param nthreads: int
-        Maximum number of threads allowed
+    :param antsthreads: int
+        Maximum number of threads allowed for ANTs/ITK modules
     :return:
     """
 
@@ -26,7 +26,7 @@ def build_template_reg_wf(nthreads=2):
                 'bold_mag_preproc',
                 'sbref_preproc',
                 'seepi_unwarp_mean',
-                'tpl_t2w_head',
+                'tpl_t2epi_head',
                 'topup_b0_rads'
             ]
         ),
@@ -67,7 +67,7 @@ def build_template_reg_wf(nthreads=2):
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
             input_image_type=0,
-            num_threads=nthreads
+            num_threads=antsthreads
         ),
         name='resamp_seepi_tpl'
     )
@@ -76,7 +76,7 @@ def build_template_reg_wf(nthreads=2):
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
             input_image_type=0,
-            num_threads=nthreads
+            num_threads=antsthreads
         ),
         name='resamp_sbref_tpl'
     )
@@ -85,7 +85,7 @@ def build_template_reg_wf(nthreads=2):
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
             input_image_type=0,
-            num_threads=nthreads
+            num_threads=antsthreads
         ),
         name='resamp_b0_tpl'
     )
@@ -94,7 +94,7 @@ def build_template_reg_wf(nthreads=2):
         ants.ApplyTransforms(
             interpolation='LanczosWindowedSinc',
             input_image_type=3,
-            num_threads=nthreads,
+            num_threads=antsthreads,
         ),
         name='resamp_bold_tpl'
     )
@@ -117,37 +117,38 @@ def build_template_reg_wf(nthreads=2):
 
     template_reg_wf.connect([
 
-        # FLIRT register unwarped SE-EPI midspace to individual template space
+        # FLIRT register unwarped SE-EPI slab midspace to individual template space
+        # Use individual template T2w SE-EPI - very similar contrast to slab SE-EPI midspace
         (inputs, flirt_seepi_tpl, [
             ('seepi_unwarp_mean', 'in_file'),
-            ('tpl_t2w_head', 'reference'),
+            ('tpl_t2epi_head', 'reference'),
         ]),
 
         # Convert FLIRT transform to ITK
         (flirt_seepi_tpl, fsl2itk, [('out_matrix_file', 'transform_file')]),
         (inputs, fsl2itk, [
             ('seepi_unwarp_mean', 'source_file'),
-            ('tpl_t2w_head', 'reference_file'),
+            ('tpl_t2epi_head', 'reference_file'),
         ]),
 
         # Resample unwarped SE-EPI midspace to template space
         (inputs, resamp_seepi_tpl, [('seepi_unwarp_mean', 'input_image')]),
-        (inputs, resamp_seepi_tpl, [('tpl_t2w_head', 'reference_image')]),
+        (inputs, resamp_seepi_tpl, [('tpl_t2epi_head', 'reference_image')]),
         (fsl2itk, resamp_seepi_tpl, [('itk_transform', 'transforms')]),
 
         # Resample unwarped SBref to template space
         (inputs, resamp_sbref_tpl, [('sbref_preproc', 'input_image')]),
-        (inputs, resamp_sbref_tpl, [('tpl_t2w_head', 'reference_image')]),
+        (inputs, resamp_sbref_tpl, [('tpl_t2epi_head', 'reference_image')]),
         (fsl2itk, resamp_sbref_tpl, [('itk_transform', 'transforms')]),
 
         # Resample TOPUP B0 estimate to template space
         (inputs, resamp_b0_tpl, [('topup_b0_rads', 'input_image')]),
-        (inputs, resamp_b0_tpl, [('tpl_t2w_head', 'reference_image')]),
+        (inputs, resamp_b0_tpl, [('tpl_t2epi_head', 'reference_image')]),
         (fsl2itk, resamp_b0_tpl, [('itk_transform', 'transforms')]),
 
         # Resample unwarped BOLD to template space
         (inputs, resamp_bold_tpl, [('bold_mag_preproc', 'input_image')]),
-        (inputs, resamp_bold_tpl, [('tpl_t2w_head', 'reference_image')]),
+        (inputs, resamp_bold_tpl, [('tpl_t2epi_head', 'reference_image')]),
         (fsl2itk, resamp_bold_tpl, [('itk_transform', 'transforms')]),
 
         # Output results

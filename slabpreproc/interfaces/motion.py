@@ -63,14 +63,14 @@ class Motion(BaseInterface):
         moco_df = pd.read_csv(
             self.inputs.moco_pars,
             names=["Rx_rad", "Ry_rad", "Rz_rad", "Dx_mm", "Dy_mm", "Dz_mm"],
-            delim_whitespace=True
+            sep=r"\s+"
         )
 
         fd_df = pd.read_csv(
             self.inputs.fd_pars,
             names=['FD_mm'],
             header=0,
-            delim_whitespace=True
+            sep=r"\s+"
         )
 
         # Add initial zero for FD (Power 2012 FD definition uses backwards difference)
