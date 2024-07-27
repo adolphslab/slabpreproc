@@ -261,7 +261,7 @@ def main():
         toplevel_wf.inputs.inputnode.seepis = fmap_paths
         toplevel_wf.inputs.inputnode.seepis_meta = fmap_metas
         toplevel_wf.inputs.inputnode.tpl_t1w_head = tpl_t1w_head_path
-        toplevel_wf.inputs.inputnode.tpl_t2w_head = tpl_t2epi_head_path
+        toplevel_wf.inputs.inputnode.tpl_t2epi_head = tpl_t2epi_head_path
         toplevel_wf.inputs.inputnode.tpl_t1w_brain = tpl_t1w_brain_path
         toplevel_wf.inputs.inputnode.tpl_t2w_brain = tpl_t2w_brain_path
         toplevel_wf.inputs.inputnode.tpl_pseg = tpl_pseg_path
