@@ -95,7 +95,7 @@ def init_bold_surf_wf(
 
     workflow = Workflow(name=name)
 
-    inputnode = pe.Node(
+    inputs = pe.Node(
         niu.IdentityInterface(
             fields=[
                 "source_file",
@@ -104,7 +104,7 @@ def init_bold_surf_wf(
                 "t1w2fsnative_xfm",
             ]
         ),
-        name="inputnode",
+        name="inputs",
     )
     itersource = pe.Node(niu.IdentityInterface(fields=["target"]), name="itersource")
     itersource.iterables = [("target", surface_spaces)]
@@ -166,17 +166,17 @@ def init_bold_surf_wf(
     )
 
     workflow.connect([
-        (inputnode, get_fsnative, [
+        (inputs, get_fsnative, [
             ("subject_id", "subject_id"),
             ("subjects_dir", "subjects_dir")
         ]),
-        (inputnode, targets, [("subject_id", "subject_id")]),
-        (inputnode, itk2lta, [
+        (inputs, targets, [("subject_id", "subject_id")]),
+        (inputs, itk2lta, [
             ("source_file", "src_file"),
             ("t1w2fsnative_xfm", "in_file"),
         ]),
         (get_fsnative, itk2lta, [("T1", "dst_file")]),
-        (inputnode, sampler, [
+        (inputs, sampler, [
             ("subjects_dir", "subjects_dir"),
             ("subject_id", "subject_id"),
         ]),
@@ -194,7 +194,7 @@ def init_bold_surf_wf(
     ])
 
     # 2023-05-04 JMT Remove unused medial NaN and good voxels code
-    workflow.connect([(inputnode, rename_src, [("source_file", "in_file")])])
+    workflow.connect([(inputs, rename_src, [("source_file", "in_file")])])
     workflow.connect([(sampler, update_metadata, [("out_file", "in_file")])])
 
     return workflow

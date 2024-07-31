@@ -36,7 +36,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from .workflows import build_toplevel_wf
+from .workflows import build_func_wf
 
 import os
 import os.path as op
@@ -77,7 +77,8 @@ def main():
     # Freesurfer subjects folder
     fs_subjects_dir = op.join(der_dir, 'freesurfer')
 
-    # Working directory
+    # Root nipype working directory
+    # Session and series level workflows use explicit subfolders (below)
     if args.workdir:
         work_dir = op.realpath(args.workdir)
     else:
@@ -124,12 +125,11 @@ def main():
         print(f'* Could not find T1w head template  - exiting')
         sys.exit(1)
 
-    # Use T2w EPI template derived from whole head SE-EPI fieldmap images
-    tpl_t2epi_head_path = tflow.get(
-        subj_id, desc='epi', resolution=2,
+    tpl_t2w_head_path = tflow.get(
+        subj_id, desc=None, resolution=2,
         suffix='T2w', extension='nii.gz'
     )
-    if not tpl_t2epi_head_path:
+    if not tpl_t2w_head_path:
         print(f'* Could not find T2w EPI head template - exiting')
         sys.exit(1)
 
@@ -182,19 +182,35 @@ def main():
     # Construct BIDS layout object for this dataset
     layout = gen_bids_layout(bids_dir)
 
-    # Get available image lists for this subject and session
-    mag_filter = {
+    # Get list of available BOLD magnitude images for this subj/sess
+    bold_mag_filter = {
         'datatype': 'func',
         'suffix': 'bold',
         'part': 'mag',
         'extension': ['.nii', '.nii.gz']
     }
 
-    bold_mag_list = layout.get(subject=subj_id, session=sess_id, **mag_filter)
+    bold_mag_list = layout.get(subject=subj_id, session=sess_id, **bold_mag_filter)
     assert len(bold_mag_list) > 0, 'No BOLD EPI magnitude images found'
 
+    # Get list of available bias corrected (norm) T2w structural images for this subj/sess
+    t2w_filter = {
+        'datatype': 'anat',
+        'suffix': 'T2w',
+        'extension': ['.nii', '.nii.gz']
+    }
+
+    t2w_list = layout.get(subject=subj_id, session=sess_id, invalid_filters='allow', **t2w_filter)
+    assert len(t2w_list) > 0, 'No bias-corrected T2w images found'
+
+    # Retain bias corrected T2w image as session anatomical reference
+    ses_t2w_head_path = None
+    for img in t2w_list:
+        if "rec-norm" in img.filename:
+            ses_t2w_head_path = op.join(img.dirname, img.filename)
+
     #
-    # BOLD magnitude images loop
+    # Within session BOLD series loop
     #
 
     for bold_mag in bold_mag_list:
@@ -209,10 +225,10 @@ def main():
         # Save task ID
         task_id = keys['task']
 
-        # Separate work folder for each BOLD image
+        # Create BOLD series work folder inside session work folder
         bold_stub = op.basename(bold_mag).split(".nii")[0]
-        this_work_dir = op.join(work_dir, bold_stub)
-        os.makedirs(this_work_dir, exist_ok=True)
+        bold_work_dir = op.join(work_dir, bold_stub)
+        os.makedirs(bold_work_dir, exist_ok=True)
 
         #
         # Find SBRef for this BOLD magnitude image
@@ -249,29 +265,30 @@ def main():
         fmap_metas = [fmap.get_metadata() for fmap in fmaps]
 
         # Build the subcortical QC workflow
-        toplevel_wf = build_toplevel_wf(this_work_dir, slab_der_dir, bold_mag_meta, args.antsthreads)
+        func_wf = build_func_wf(bold_work_dir, slab_der_dir, bold_mag_meta, args.antsthreads)
 
-        # Supply input images
-        toplevel_wf.inputs.inputnode.subject_id = subj_id
-        toplevel_wf.inputs.inputnode.fs_subjects_dir = fs_subjects_dir
-        toplevel_wf.inputs.inputnode.bold_mag = bold_mag_path
-        toplevel_wf.inputs.inputnode.bold_mag_meta = bold_mag_meta
-        toplevel_wf.inputs.inputnode.sbref = sbref_path
-        toplevel_wf.inputs.inputnode.sbref_meta = sbref_meta
-        toplevel_wf.inputs.inputnode.seepis = fmap_paths
-        toplevel_wf.inputs.inputnode.seepis_meta = fmap_metas
-        toplevel_wf.inputs.inputnode.tpl_t1w_head = tpl_t1w_head_path
-        toplevel_wf.inputs.inputnode.tpl_t2epi_head = tpl_t2epi_head_path
-        toplevel_wf.inputs.inputnode.tpl_t1w_brain = tpl_t1w_brain_path
-        toplevel_wf.inputs.inputnode.tpl_t2w_brain = tpl_t2w_brain_path
-        toplevel_wf.inputs.inputnode.tpl_pseg = tpl_pseg_path
-        toplevel_wf.inputs.inputnode.tpl_dseg = tpl_dseg_path
-        toplevel_wf.inputs.inputnode.tpl_bmask = tpl_bmask_path
-        toplevel_wf.inputs.inputnode.fs_t1w_head = fs_t1w_head_path
+        # Supply inputs to func_wf
+        func_wf.inputs.in_node.subject_id = subj_id
+        func_wf.inputs.in_node.fs_subjects_dir = fs_subjects_dir
+        func_wf.inputs.in_node.bold_mag = bold_mag_path
+        func_wf.inputs.in_node.bold_mag_meta = bold_mag_meta
+        func_wf.inputs.in_node.sbref = sbref_path
+        func_wf.inputs.in_node.sbref_meta = sbref_meta
+        func_wf.inputs.in_node.seepis = fmap_paths
+        func_wf.inputs.in_node.seepis_meta = fmap_metas
+        func_wf.inputs.in_node.tpl_t1w_head = tpl_t1w_head_path
+        func_wf.inputs.in_node.tpl_t2w_head = tpl_t2w_head_path
+        func_wf.inputs.in_node.tpl_t1w_brain = tpl_t1w_brain_path
+        func_wf.inputs.in_node.tpl_t2w_brain = tpl_t2w_brain_path
+        func_wf.inputs.in_node.tpl_pseg = tpl_pseg_path
+        func_wf.inputs.in_node.tpl_dseg = tpl_dseg_path
+        func_wf.inputs.in_node.tpl_bmask = tpl_bmask_path
+        func_wf.inputs.in_node.fs_t1w_head = fs_t1w_head_path
+        func_wf.inputs.in_node.ses_t2w_head = ses_t2w_head_path
 
         # Run workflow
-        # Workflow outputs are stored in a BIDS derivatives folder
-        toplevel_wf.run()
+        # Workflow outputs are stored in the BIDS derivatives/slabpreproc folder
+        func_wf.run()
 
 
 def gen_bids_layout(bids_dir):

@@ -17,7 +17,7 @@ def build_surface_wf():
 
     surface_wf = pe.Workflow(name='surface_wf')
 
-    inputnode = pe.Node(
+    inputs = pe.Node(
         pe.utils.IdentityInterface(
             fields=[
                 'fs_subjects_dir',
@@ -27,7 +27,7 @@ def build_surface_wf():
                 'fs_t1w_head'
             ]
         ),
-        name='inputnode'
+        name='inputs'
     )
 
     # Calculate robust transform from individual template space to fsnative space
@@ -74,9 +74,9 @@ def build_surface_wf():
     surface_wf.connect([
 
         # Construct transform from FreeSurfer conformed image to
-        (inputnode, tpl2fsnative_xfm, [('tpl_t1w_head', 'source_file')]),
-        (inputnode, tpl2fsnative_xfm, [('fs_t1w_head', 'target_file')]),
-        (inputnode, bold_fsnative, [
+        (inputs, tpl2fsnative_xfm, [('tpl_t1w_head', 'source_file')]),
+        (inputs, tpl2fsnative_xfm, [('fs_t1w_head', 'target_file')]),
+        (inputs, bold_fsnative, [
             ('fs_subjects_dir', 'subjects_dir'),
             ('subject_id', 'subject_id'),
             ('subject_id', 'target_subject'),

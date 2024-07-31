@@ -23,8 +23,8 @@ def build_qc_wf():
     Build quality control workflow
     """
 
-    # QC inputs
-    inputs = pe.Node(
+    # Workflow input node
+    in_node = pe.Node(
         util.IdentityInterface(
             fields=[
                 'tpl_bold_mag_preproc',
@@ -37,7 +37,7 @@ def build_qc_wf():
                 'bold_mag_meta'
             ]
         ),
-        name='inputs'
+        name='in_node'
     )
 
     # Voxel-wise tSFNR map
@@ -80,8 +80,8 @@ def build_qc_wf():
         name='est_dropout'
     )
 
-    # Define outputs from QC workflow
-    outputs = pe.Node(
+    # Workflow output node
+    out_node = pe.Node(
         util.IdentityInterface(
             fields=[
                 'tpl_bold_tmean',
@@ -92,39 +92,39 @@ def build_qc_wf():
                 'motion_csv'
             ]
         ),
-        name='outputs'
+        name='out_node'
     )
 
     # QC workflow setup
     qc_wf = pe.Workflow(name='qc_wf')
 
     qc_wf.connect([
-        (inputs, bold_tsfnr, [('tpl_bold_mag_preproc', 'in_file')]),
+        (in_node, bold_tsfnr, [('tpl_bold_mag_preproc', 'in_file')]),
 
         # Pass tSFNR and labels to ROI stats
         (bold_tsfnr, bold_tsfnr_roistats, [('tsnr_file', 'in_file')]),
-        (inputs, bold_tsfnr_roistats, [('tpl_dseg', 'mask')]),
+        (in_node, bold_tsfnr_roistats, [('tpl_dseg', 'mask')]),
 
         # Estimated region dropout from SBRef and mean SE-EPI
-        (inputs, est_dropout, [
+        (in_node, est_dropout, [
             ('tpl_bold_sbref', 'sbref'),
             ('tpl_mean_seepi', 'mseepi'),
             ('tpl_bmask', 'bmask')
         ]),
 
         # Calculate FD and LPF FD from FSL motion parameters
-        (inputs, calc_fd, [('moco_pars', 'in_file')]),
-        (inputs, build_motion_table, [('moco_pars', 'moco_pars')]),
+        (in_node, calc_fd, [('moco_pars', 'in_file')]),
+        (in_node, build_motion_table, [('moco_pars', 'moco_pars')]),
         (calc_fd, build_motion_table, [('out_file', 'fd_pars')]),
-        (inputs, build_motion_table, [('bold_mag_meta', 'bold_mag_meta')]),
+        (in_node, build_motion_table, [('bold_mag_meta', 'bold_mag_meta')]),
 
         # Return all stats images
-        (bold_tsfnr, outputs, [('mean_file', 'tpl_bold_tmean')]),
-        (bold_tsfnr, outputs, [('stddev_file', 'tpl_bold_tsd')]),
-        (bold_tsfnr, outputs, [('tsnr_file', 'tpl_bold_tsfnr')]),
-        (bold_tsfnr_roistats, outputs, [('out_file', 'tpl_bold_tsfnr_roistats')]),
-        (est_dropout, outputs, [('dropout', 'tpl_dropout')]),
-        (build_motion_table, outputs, [('motion_csv', 'motion_csv')])
+        (bold_tsfnr, out_node, [('mean_file', 'tpl_bold_tmean')]),
+        (bold_tsfnr, out_node, [('stddev_file', 'tpl_bold_tsd')]),
+        (bold_tsfnr, out_node, [('tsnr_file', 'tpl_bold_tsfnr')]),
+        (bold_tsfnr_roistats, out_node, [('out_file', 'tpl_bold_tsfnr_roistats')]),
+        (est_dropout, out_node, [('dropout', 'tpl_dropout')]),
+        (build_motion_table, out_node, [('motion_csv', 'motion_csv')])
     ])
 
     return qc_wf

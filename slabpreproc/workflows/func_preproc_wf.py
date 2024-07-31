@@ -23,8 +23,8 @@ def build_func_preproc_wf(antsthreads=2):
     :return:
     """
 
-    # Preproc inputs
-    inputs = pe.Node(
+    # Workflow input node
+    in_node = pe.Node(
         util.IdentityInterface(
             fields=(
                 'bold_mag',
@@ -34,7 +34,7 @@ def build_func_preproc_wf(antsthreads=2):
                 'seepis',
                 'seepis_meta')
         ),
-        name='inputs'
+        name='in_node'
     )
 
     # Identify SE-EPI fieldmap with same PE direction as BOLD SBRef
@@ -94,18 +94,19 @@ def build_func_preproc_wf(antsthreads=2):
     # registration of EPI to individual T2w space
     topup_est = pe.Node(
         fsl.TOPUP(
-            fwhm=4,
+            # Defaults to b02b0.cnf TOPUP config file
             output_type='NIFTI_GZ'
         ),
         name='topup_est'
     )
 
-    seepi_unwarp_mean = pe.Node(
+    # Average unwarped AP and PA SE-EPIs
+    seepi_preproc = pe.Node(
         fsl.maths.MeanImage(
             dimension='T',
             output_type='NIFTI_GZ'
         ),
-        name='seepi_unwarp_mean'
+        name='seepi_preproc'
     )
 
     # Apply TOPUP correction to BOLD and SBRef
@@ -134,18 +135,18 @@ def build_func_preproc_wf(antsthreads=2):
         name='hz2rads'
     )
 
-    # Define outputs for the fMRI preproc workflow
-    outputs = pe.Node(
+    # Workflow output node
+    out_node = pe.Node(
         util.IdentityInterface(
             fields=(
                 'bold_mag_preproc',
                 'sbref_preproc',
-                'seepi_unwarp_mean',
+                'seepi_preproc',
                 'moco_pars',
                 'topup_b0_rads'
             ),
         ),
-        name='outputs'
+        name='out_node'
     )
 
     #
@@ -157,34 +158,34 @@ def build_func_preproc_wf(antsthreads=2):
     func_preproc_wf.connect([
 
         # Extract the first fmap in the list to use as a BOLD to fmap registration reference
-        (inputs, get_seepi_ref, [
+        (in_node, get_seepi_ref, [
             ('seepis', 'seepis'),
             ('seepis_meta', 'seepis_meta'),
             ('sbref_meta', 'sbref_meta')
         ]),
 
         # Register the SBRef to the SE-EPI with the same PE direction
-        (inputs, sbref2seepi, [('sbref', 'moving_image')]),
+        (in_node, sbref2seepi, [('sbref', 'moving_image')]),
         (get_seepi_ref, sbref2seepi, [('seepi_ref', 'fixed_image')]),
 
         # Motion correct BOLD series to the fmap-aligned SBRef image
-        (inputs, mcflirt, [('bold_mag', 'in_file')]),
+        (in_node, mcflirt, [('bold_mag', 'in_file')]),
         (sbref2seepi, mcflirt, [('warped_image', 'ref_file')]),
 
         # Create TOPUP encoding files
         # Requires both the image to be unwarped and the metadata for that image
-        (inputs, sbref_enc_file, [('sbref', 'epi_list')]),
-        (inputs, sbref_enc_file, [('sbref_meta', 'meta_list')]),
-        (inputs, seepi_enc_file, [('seepis', 'epi_list')]),
-        (inputs, seepi_enc_file, [('seepis_meta', 'meta_list')]),
+        (in_node, sbref_enc_file, [('sbref', 'epi_list')]),
+        (in_node, sbref_enc_file, [('sbref_meta', 'meta_list')]),
+        (in_node, seepi_enc_file, [('seepis', 'epi_list')]),
+        (in_node, seepi_enc_file, [('seepis_meta', 'meta_list')]),
 
         # Estimate TOPUP corrections from fmap images
-        (inputs, concat, [('seepis', 'in_files')]),
+        (in_node, concat, [('seepis', 'in_files')]),
         (concat, topup_est, [('merged_file', 'in_file')]),
         (seepi_enc_file, topup_est, [('encoding_file', 'encoding_file')]),
 
         # Create SE-EPI reference (temporal mean of unwarped seepis)
-        (topup_est, seepi_unwarp_mean, [('out_corrected', 'in_file')]),
+        (topup_est, seepi_preproc, [('out_corrected', 'in_file')]),
 
         # Apply TOPUP correction to motion corrected BOLD
         (topup_est, unwarp_bold, [
@@ -200,17 +201,17 @@ def build_func_preproc_wf(antsthreads=2):
             ('out_movpar', 'in_topup_movpar')
         ]),
         (sbref_enc_file, unwarp_sbref, [('encoding_file', 'encoding_file')]),
-        (inputs, unwarp_sbref, [('sbref', 'in_files')]),
+        (in_node, unwarp_sbref, [('sbref', 'in_files')]),
 
         # Rescale TOPUP B0 map from Hz to rad/s
         (topup_est, hz2rads, [('out_field', 'in_file')]),
 
         # Output results
-        (unwarp_bold, outputs, [('out_corrected', 'bold_mag_preproc')]),
-        (unwarp_sbref, outputs, [('out_corrected', 'sbref_preproc')]),
-        (seepi_unwarp_mean, outputs, [('out_file', 'seepi_unwarp_mean')]),
-        (hz2rads, outputs, [('out_file', 'topup_b0_rads')]),
-        (mcflirt, outputs, [('par_file', 'moco_pars')]),
+        (unwarp_bold, out_node, [('out_corrected', 'bold_mag_preproc')]),
+        (unwarp_sbref, out_node, [('out_corrected', 'sbref_preproc')]),
+        (seepi_preproc, out_node, [('out_file', 'seepi_preproc')]),
+        (hz2rads, out_node, [('out_file', 'topup_b0_rads')]),
+        (mcflirt, out_node, [('par_file', 'moco_pars')]),
     ])
 
     return func_preproc_wf
