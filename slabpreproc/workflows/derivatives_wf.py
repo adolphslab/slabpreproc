@@ -52,7 +52,7 @@ def build_derivatives_wf(deriv_dir):
     file_sort_dicts = [
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_bold', 'FileType': 'Image'},
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_sbref', 'FileType': 'Image'},
-        {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_seepi_preproc', 'FileType': 'Image'},
+        {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_seepi', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tmean_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsd_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsfnr_bold', 'FileType': 'Image'},
