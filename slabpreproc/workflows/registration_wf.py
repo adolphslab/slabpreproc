@@ -36,6 +36,12 @@ def build_reg_epi2tpl_wf(antsthreads=2):
 
     # Estimate rigid body transform from unwarped SE-EPI to session T2w
 
+    # FLIRT angular search parameters
+    # Restrict search to +/- 6 degrees. Libera; limits for inter-session head rotations
+    alpha_max = 6
+    dalpha_coarse = (2 * alpha_max) // 3 + 1
+    dalpha_fine = (2 * alpha_max) // 12 + 1
+
     # FLIRT rigid body registration preferred over antsAI
     flirt_epi2anat = pe.Node(
         fsl.FLIRT(
@@ -43,10 +49,11 @@ def build_reg_epi2tpl_wf(antsthreads=2):
             cost='corratio',
             interp='spline',
             uses_qform=True,
-            # no_search=True,  # Force local parameter search only
-            searchr_x=[-5, 5],
-            searchr_y=[-5, 5],
-            searchr_z=[-5, 5],
+            searchr_x=[-alpha_max, alpha_max],
+            searchr_y=[-alpha_max, alpha_max],
+            searchr_z=[-alpha_max, alpha_max],
+            coarse_search=dalpha_coarse,
+            fine_search=dalpha_fine,
             out_matrix_file='tx_epi2anat.mat',
             output_type='NIFTI_GZ',
             terminal_output='none'
@@ -59,7 +66,6 @@ def build_reg_epi2tpl_wf(antsthreads=2):
         fsl.FLIRT(
             dof=6,
             cost='corratio',
-            uses_qform=True,
             out_matrix_file='tx_anat2tpl.mat',
             output_type='NIFTI_GZ',
             terminal_output='none'
@@ -77,7 +83,7 @@ def build_reg_epi2tpl_wf(antsthreads=2):
     )
 
     # Convert FLIRT affine matrix to ITK transform for ANTs resampling
-    # Prefer ITK Lanczos sinc over FSL spline or sinc
+    # Prefer ITK Lanczos sinc (reduced resampling blur) over FSL spline or sinc
     fsl2itk = pe.Node(
         c3.C3dAffineTool(
             fsl2ras=True,
