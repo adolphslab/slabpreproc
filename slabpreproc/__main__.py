@@ -193,6 +193,10 @@ def main():
     bold_mag_list = layout.get(subject=subj_id, session=sess_id, **bold_mag_filter)
     assert len(bold_mag_list) > 0, 'No BOLD EPI magnitude images found'
 
+    # *** Complex-valued support ***
+    # Generate corresponding phase image list from mag list
+    bold_phs_list = [pname.replace('mag', 'phase') for pname in bold_mag_list]
+
     # Get list of available bias corrected (norm) T2w structural images for this subj/sess
     t2w_filter = {
         'datatype': 'anat',
