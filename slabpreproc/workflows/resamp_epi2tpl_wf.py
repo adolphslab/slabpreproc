@@ -11,8 +11,10 @@ import nipype.interfaces.ants as ants
 import nipype.interfaces.c3 as c3
 import nipype.pipeline.engine as pe
 
+from ..interfaces import Cart2Pol
 
-def build_reg_epi2tpl_wf(antsthreads=2):
+
+def build_resamp_epi2tpl_wf(antsthreads=2):
     """
     :param antsthreads: int
         Maximum number of threads allowed for ANTs/ITK modules
@@ -23,9 +25,10 @@ def build_reg_epi2tpl_wf(antsthreads=2):
     in_node = pe.Node(
         util.IdentityInterface(
             fields=[
-                'bold_mag_preproc',
-                'sbref_preproc',
-                'seepi_preproc',
+                'bold_re_preproc',
+                'bold_im_preproc',
+                'sbref_mag_preproc',
+                'seepi_mag_preproc',
                 'ses_t2w_head',
                 'tpl_t2w_head',
                 'topup_b0_rads',
@@ -74,67 +77,47 @@ def build_reg_epi2tpl_wf(antsthreads=2):
     )
 
     # Concatenate EPI to anat and anat to tpl rigid transforms
-    concat_tx = pe.Node(
-        fsl.ConvertXFM(
-            out_file='tx_epi2tpl.mat',
-            concat_xfm=True
-        ),
-        name='concat_tx'
-    )
+    concat_tx = pe.Node(fsl.ConvertXFM(out_file='tx_epi2tpl.mat', concat_xfm=True), name='concat_tx')
 
     # Convert FLIRT affine matrix to ITK transform for ANTs resampling
     # Prefer ITK Lanczos sinc (reduced resampling blur) over FSL spline or sinc
-    fsl2itk = pe.Node(
-        c3.C3dAffineTool(
-            fsl2ras=True,
-            itk_transform=True
-        ),
-        name='fsl2itk'
-    )
+    fsl2itk = pe.Node(c3.C3dAffineTool(fsl2ras=True, itk_transform=True), name='fsl2itk')
 
     resamp_seepi_tpl = pe.Node(
-        ants.ApplyTransforms(
-            interpolation='LanczosWindowedSinc',
-            input_image_type=0,
-            num_threads=antsthreads
-        ),
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', input_image_type=0, num_threads=antsthreads),
         name='resamp_seepi_tpl'
     )
 
     resamp_sbref_tpl = pe.Node(
-        ants.ApplyTransforms(
-            interpolation='LanczosWindowedSinc',
-            input_image_type=0,
-            num_threads=antsthreads
-        ),
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', input_image_type=0, num_threads=antsthreads),
         name='resamp_sbref_tpl'
     )
 
     resamp_b0_tpl = pe.Node(
-        ants.ApplyTransforms(
-            interpolation='LanczosWindowedSinc',
-            input_image_type=0,
-            num_threads=antsthreads
-        ),
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', input_image_type=0, num_threads=antsthreads),
         name='resamp_b0_tpl'
     )
 
-    resamp_bold_tpl = pe.Node(
-        ants.ApplyTransforms(
-            interpolation='LanczosWindowedSinc',
-            input_image_type=3,
-            num_threads=antsthreads,
-        ),
-        name='resamp_bold_tpl'
+    resamp_bold_re_tpl = pe.Node(
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', input_image_type=3, num_threads=antsthreads,),
+        name='resamp_bold_re_tpl'
     )
+
+    resamp_bold_im_tpl = pe.Node(
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', input_image_type=3, num_threads=antsthreads,),
+        name='resamp_bold_im_tpl'
+    )
+
+    bold_cart2pol = pe.Node(Cart2Pol(), name='bold_cart2pol')
 
     # Workflow output node
     out_node = pe.Node(
         util.IdentityInterface(
             fields=[
                 'tpl_bold_mag_preproc',
-                'tpl_sbref_preproc',
-                'tpl_seepi_preproc',
+                'tpl_bold_phs_preproc',
+                'tpl_sbref_mag_preproc',
+                'tpl_seepi_mag_preproc',
                 'tpl_b0_rads'
             ]
         ),
@@ -142,13 +125,13 @@ def build_reg_epi2tpl_wf(antsthreads=2):
     )
 
     # Template registration workflow setup
-    epi2tpl_wf = pe.Workflow(name='epi2tpl_wf')
+    resamp_epi2tpl_wf = pe.Workflow(name='resamp_epi2tpl_wf')
 
-    epi2tpl_wf.connect([
+    resamp_epi2tpl_wf.connect([
 
         # Register SE-EPI to session T2w
         (in_node, flirt_epi2anat, [
-            ('seepi_preproc', 'in_file'),
+            ('seepi_mag_preproc', 'in_file'),
             ('ses_t2w_head', 'reference'),
         ]),
 
@@ -166,17 +149,17 @@ def build_reg_epi2tpl_wf(antsthreads=2):
         # Convert EPI to template transform from FSL to ITK format
         (concat_tx, fsl2itk, [('out_file', 'transform_file')]),
         (in_node, fsl2itk, [
-            ('seepi_preproc', 'source_file'),
+            ('seepi_mag_preproc', 'source_file'),
             ('tpl_t2w_head', 'reference_file'),
         ]),
 
         # Resample unwarped SE-EPI midspace to template space
-        (in_node, resamp_seepi_tpl, [('seepi_preproc', 'input_image')]),
+        (in_node, resamp_seepi_tpl, [('seepi_mag_preproc', 'input_image')]),
         (in_node, resamp_seepi_tpl, [('tpl_t2w_head', 'reference_image')]),
         (fsl2itk, resamp_seepi_tpl, [('itk_transform', 'transforms')]),
 
-        # Resample unwarped SBref to template space
-        (in_node, resamp_sbref_tpl, [('sbref_preproc', 'input_image')]),
+        # Resample unwarped SBref mag to template space
+        (in_node, resamp_sbref_tpl, [('sbref_mag_preproc', 'input_image')]),
         (in_node, resamp_sbref_tpl, [('tpl_t2w_head', 'reference_image')]),
         (fsl2itk, resamp_sbref_tpl, [('itk_transform', 'transforms')]),
 
@@ -185,17 +168,27 @@ def build_reg_epi2tpl_wf(antsthreads=2):
         (in_node, resamp_b0_tpl, [('tpl_t2w_head', 'reference_image')]),
         (fsl2itk, resamp_b0_tpl, [('itk_transform', 'transforms')]),
 
-        # Resample unwarped BOLD to template space
-        (in_node, resamp_bold_tpl, [('bold_mag_preproc', 'input_image')]),
-        (in_node, resamp_bold_tpl, [('tpl_t2w_head', 'reference_image')]),
-        (fsl2itk, resamp_bold_tpl, [('itk_transform', 'transforms')]),
+        # Resample unwarped BOLD real to template space
+        (in_node, resamp_bold_re_tpl, [('bold_re_preproc', 'input_image')]),
+        (in_node, resamp_bold_re_tpl, [('tpl_t2w_head', 'reference_image')]),
+        (fsl2itk, resamp_bold_re_tpl, [('itk_transform', 'transforms')]),
+
+        # Resample unwarped BOLD imag to template space
+        (in_node, resamp_bold_im_tpl, [('bold_im_preproc', 'input_image')]),
+        (in_node, resamp_bold_im_tpl, [('tpl_t2w_head', 'reference_image')]),
+        (fsl2itk, resamp_bold_im_tpl, [('itk_transform', 'transforms')]),
+
+        # Convert BOLD re/im to mag/phs
+        (resamp_bold_re_tpl, bold_cart2pol, [('output_image', 'bold_re')]),
+        (resamp_bold_im_tpl, bold_cart2pol, [('output_image', 'bold_im')]),
 
         # Output results
-        (resamp_seepi_tpl, out_node, [('output_image', 'tpl_seepi_preproc')]),
-        (resamp_bold_tpl, out_node, [('output_image', 'tpl_bold_mag_preproc')]),
-        (resamp_sbref_tpl, out_node, [('output_image', 'tpl_sbref_preproc')]),
+        (bold_cart2pol, out_node, [('bold_mag', 'tpl_bold_mag_preproc')]),
+        (bold_cart2pol, out_node, [('bold_phs_rad', 'tpl_bold_phs_preproc')]),
+        (resamp_seepi_tpl, out_node, [('output_image', 'tpl_seepi_mag_preproc')]),
+        (resamp_sbref_tpl, out_node, [('output_image', 'tpl_sbref_mag_preproc')]),
         (resamp_b0_tpl, out_node, [('output_image', 'tpl_b0_rads')]),
 
     ])
 
-    return epi2tpl_wf
+    return resamp_epi2tpl_wf

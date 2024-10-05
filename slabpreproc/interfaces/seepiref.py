@@ -16,8 +16,6 @@ from nipype.interfaces.base import (
     TraitedSpec,
 )
 
-from nipype.utils.filemanip import split_filename
-
 """
 Identify the SE-EPI fieldmap with the same PE direction as the BOLD series to be unwarped
 Use the SBRef for the BOLD series for PE info
@@ -26,17 +24,17 @@ Use the SBRef for the BOLD series for PE info
 
 class SEEPIRefInputSpec(BaseInterfaceInputSpec):
 
-    seepis = InputMultiPath(
+    seepi_mag = InputMultiPath(
         File(exists=True),
         copyfile=False,
         desc='List of SE-EPI fieldmap Nifti files',
         mandatory=True
     )
 
-    seepis_meta = InputMultiObject(
+    seepi_meta = InputMultiObject(
         traits.DictStrAny,
         mandatory=True,
-        desc="List of SE-EPI metadata dictionaries",
+        desc="List of SE-EPI fieldmap metadata dictionaries",
     )
 
     sbref_meta = traits.Dict(
@@ -46,9 +44,9 @@ class SEEPIRefInputSpec(BaseInterfaceInputSpec):
 
 class SEEPIRefOutputSpec(TraitedSpec):
 
-    seepi_ref = File(
+    seepi_mag_ref = File(
         exists=True,
-        desc="Warped SE-EPI fmap with same PE as BOLD series"
+        desc="Warped SE-EPI mag fmap with same PE as BOLD series"
     )
 
 
@@ -74,12 +72,12 @@ class SEEPIRef(BaseInterface):
         sbref_pe_dir = self.inputs.sbref_meta['PhaseEncodingDirection']
 
         # Loop over SE-EPI metadata extracting PE directions
-        for fc, seepi_fname in enumerate(self.inputs.seepis):
+        for fc, seepi_mag_fname in enumerate(self.inputs.seepi_mag):
 
-            seepi_meta = self.inputs.seepis_meta[fc]
-            seepi_pe_dir = seepi_meta['PhaseEncodingDirection']
+            fmap_meta = self.inputs.seepi_meta[fc]
+            fmap_pe_dir = fmap_meta['PhaseEncodingDirection']
 
-            if seepi_pe_dir == sbref_pe_dir:
-                outputs["seepi_ref"] = seepi_fname
+            if fmap_pe_dir == sbref_pe_dir:
+                outputs["seepi_mag_ref"] = seepi_mag_fname
 
         return outputs

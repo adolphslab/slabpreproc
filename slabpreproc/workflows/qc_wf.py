@@ -28,13 +28,13 @@ def build_qc_wf():
         util.IdentityInterface(
             fields=[
                 'tpl_bold_mag_preproc',
-                'tpl_bold_sbref',
-                'tpl_mean_seepi',
+                'tpl_sbref_mag_preproc',
+                'tpl_seepi_mag_preproc',
                 'tpl_bmask',
                 'tpl_b0_rads',
                 'tpl_dseg',
                 'moco_pars',
-                'bold_mag_meta'
+                'bold_meta'
             ]
         ),
         name='in_node'
@@ -84,10 +84,10 @@ def build_qc_wf():
     out_node = pe.Node(
         util.IdentityInterface(
             fields=[
-                'tpl_bold_tmean',
-                'tpl_bold_tsd',
-                'tpl_bold_tsfnr',
-                'tpl_bold_tsfnr_roistats',
+                'tpl_bold_mag_tmean',
+                'tpl_bold_mag_tsd',
+                'tpl_bold_mag_tsfnr',
+                'tpl_bold_mag_tsfnr_roistats',
                 'tpl_dropout',
                 'motion_csv'
             ]
@@ -107,8 +107,8 @@ def build_qc_wf():
 
         # Estimated region dropout from SBRef and mean SE-EPI
         (in_node, est_dropout, [
-            ('tpl_bold_sbref', 'sbref'),
-            ('tpl_mean_seepi', 'mseepi'),
+            ('tpl_sbref_mag_preproc', 'sbref'),
+            ('tpl_seepi_mag_preproc', 'mseepi'),
             ('tpl_bmask', 'bmask')
         ]),
 
@@ -116,13 +116,13 @@ def build_qc_wf():
         (in_node, calc_fd, [('moco_pars', 'in_file')]),
         (in_node, build_motion_table, [('moco_pars', 'moco_pars')]),
         (calc_fd, build_motion_table, [('out_file', 'fd_pars')]),
-        (in_node, build_motion_table, [('bold_mag_meta', 'bold_mag_meta')]),
+        (in_node, build_motion_table, [('bold_meta', 'bold_meta')]),
 
         # Return all stats images
-        (bold_tsfnr, out_node, [('mean_file', 'tpl_bold_tmean')]),
-        (bold_tsfnr, out_node, [('stddev_file', 'tpl_bold_tsd')]),
-        (bold_tsfnr, out_node, [('tsnr_file', 'tpl_bold_tsfnr')]),
-        (bold_tsfnr_roistats, out_node, [('out_file', 'tpl_bold_tsfnr_roistats')]),
+        (bold_tsfnr, out_node, [('mean_file', 'tpl_bold_mag_tmean')]),
+        (bold_tsfnr, out_node, [('stddev_file', 'tpl_bold_mag_tsd')]),
+        (bold_tsfnr, out_node, [('tsnr_file', 'tpl_bold_mag_tsfnr')]),
+        (bold_tsfnr_roistats, out_node, [('out_file', 'tpl_bold_mag_tsfnr_roistats')]),
         (est_dropout, out_node, [('dropout', 'tpl_dropout')]),
         (build_motion_table, out_node, [('motion_csv', 'motion_csv')])
     ])

@@ -16,10 +16,10 @@ def build_melodic_wf(tr_s=1.0):
         pe.utils.IdentityInterface(
             fields=[
                 'tpl_bold_mag_preproc',
-                'tpl_bold_tmean',
+                'tpl_bold_mag_tmean',
                 'tpl_t1w_head',
                 'tpl_bmask',
-                'bold_mag_meta'
+                'bold_meta'
             ]
         ),
         name='in_node'
@@ -51,7 +51,7 @@ def build_melodic_wf(tr_s=1.0):
 
     melodic_wf.connect([
         (in_node, melmask, [
-            ('tpl_bold_tmean', 'tmean'),
+            ('tpl_bold_mag_tmean', 'tmean'),
             ('tpl_bmask', 'bmask')
         ]),
         (in_node, melodic, [

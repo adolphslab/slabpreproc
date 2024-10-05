@@ -55,12 +55,12 @@ class DerivativesSorterInputSpec(BaseInterfaceInputSpec):
         Directory(exists=True),
         copyfile=False,
         desc='List of folders to sort into derivatives folder',
-        mandatory=True
+        mandatory=False
     )
 
     folder_sort_dicts = InputMultiObject(
         traits.DictStrAny,
-        mandatory=True,
+        mandatory=False,
         desc="List of sorting info dictionaries corresponding to folder_list",
     )
 
@@ -138,31 +138,33 @@ class DerivativesSorter(BaseInterface):
         # Copying nipype output folders (eg melodic) to derivatives
 
         # Loop over all input folders and associated sorting dicts
-        for in_dname, sort_dict in zip(self.inputs.folder_list, self.inputs.folder_sort_dicts):
+        if len(self.inputs.folder_list) > 0:
 
-            # Safe create data type subfolder (eg melodic)
-            datatype_out_dname = op.join(subjsess_deriv_dname, sort_dict['DataType'])
-            os.makedirs(datatype_out_dname, exist_ok=True)
+            for in_dname, sort_dict in zip(self.inputs.folder_list, self.inputs.folder_sort_dicts):
 
-            # Output subfolder path. Replace current suffix (eg _bold) with new suffix (eg _melodic)
-            new_suffix = sort_dict['NewSuffix']
-            out_pname = op.join(datatype_out_dname, source_bname.replace(old_suffix, new_suffix))
+                # Safe create data type subfolder (eg melodic)
+                datatype_out_dname = op.join(subjsess_deriv_dname, sort_dict['DataType'])
+                os.makedirs(datatype_out_dname, exist_ok=True)
 
-            # Copy nipype folder to deriv_dname/subj_dir/sess_dir/task_out_dname
-            print(f'  Copying {in_dname}')
-            print(f'  to {out_pname}')
-            shutil.copytree(in_dname, out_pname, dirs_exist_ok=True)
+                # Output subfolder path. Replace current suffix (eg _bold) with new suffix (eg _melodic)
+                new_suffix = sort_dict['NewSuffix']
+                out_pname = op.join(datatype_out_dname, source_bname.replace(old_suffix, new_suffix))
 
-            # 2024-07-25 JMT Skip aux file removal - rmtree throwing errors for melodic _report tree
-            # Remove all Nipype auxiliary files from output folder ('_*' and '*.pklz')
-            # fnames = glob(op.join(out_pname, '_*')) + glob(op.join(out_pname, '*.pklz'))
-            # for fname in fnames:
-            #     if op.isfile(fname):
-            #         os.remove(fname)
-            #     elif op.isdir(fname):
-            #         shutil.rmtree(fname)
-            #     else:
-            #         pass
+                # Copy nipype folder to deriv_dname/subj_dir/sess_dir/task_out_dname
+                print(f'  Copying {in_dname}')
+                print(f'  to {out_pname}')
+                shutil.copytree(in_dname, out_pname, dirs_exist_ok=True)
+
+                # 2024-07-25 JMT Skip aux file removal - rmtree throwing errors for melodic _report tree
+                # Remove all Nipype auxiliary files from output folder ('_*' and '*.pklz')
+                # fnames = glob(op.join(out_pname, '_*')) + glob(op.join(out_pname, '*.pklz'))
+                # for fname in fnames:
+                #     if op.isfile(fname):
+                #         os.remove(fname)
+                #     elif op.isdir(fname):
+                #         shutil.rmtree(fname)
+                #     else:
+                #         pass
 
         return runtime
 

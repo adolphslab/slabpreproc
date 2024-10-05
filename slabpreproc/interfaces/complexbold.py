@@ -4,6 +4,7 @@ Utility functions for converting complex BOLD between rect and polar representat
 AUTHOR : Mike Tyszka
 PLACE  : Caltech
 DATES  : 2022-09-16 JMT Adapt from dropout.py
+         2024-10-02 JMT Output separate real and imag component images
 """
 
 import os
@@ -19,124 +20,137 @@ from nipype.interfaces.base import (
 )
 
 
-"""
-Complex polar (mag/phs) to rectangular (real/imag) conversion
-"""
+class Pol2CartInputSpec(BaseInterfaceInputSpec):
 
+    bold_mag = File(
+        desc='4D BOLD magnitude image',
+        exists=True,
+        mandatory=True
+    )
 
-class Pol2RectInputSpec(BaseInterfaceInputSpec):
-
-    bold_pol = File(
-        desc='4D BOLD polar image (mag then polar concat in axis 3)',
+    bold_phs_rad = File(
+        desc='4D BOLD phase image (radians)',
         exists=True,
         mandatory=True
     )
 
 
-class Pol2RectOutputSpec(TraitedSpec):
-    bold_rect = File(
-        desc="4D BOLD rectangular image (real then imag concat in axis 3)",
+class Pol2CartOutputSpec(TraitedSpec):
+
+    bold_re = File(
+        desc="4D BOLD real image",
+    )
+
+    bold_im = File(
+        desc="4D BOLD imag image",
     )
 
 
-class Pol2Rect(BaseInterface):
-    input_spec = Pol2RectInputSpec
-    output_spec = Pol2RectOutputSpec
+class Pol2Cart(BaseInterface):
+
+    input_spec = Pol2CartInputSpec
+    output_spec = Pol2CartOutputSpec
 
     def _run_interface(self, runtime):
 
-        # Load polar complex BOLD image
-        bold_pol_nii = nib.load(self.inputs.bold_pol)
-        bold_pol_img = bold_pol_nii.get_fdata()
-
-        nt = bold_pol_img.shape[3]
-        ht = int(nt/2)
-
-        # Separate into mag and phase arrays
-        bold_m = bold_pol_img[..., :(ht-1)]
-        bold_p = bold_pol_img[..., ht:]
+        # Load 4D mag and phase BOLD images
+        bold_mag_nii = nib.load(self.inputs.bold_mag)
+        bold_mag = bold_mag_nii.get_fdata()
+        bold_phs_rad_nii = nib.load(self.inputs.bold_phs_rad)
+        bold_phs_rad = bold_phs_rad_nii.get_fdata()
 
         # Calculate real and imaginary channels
-        bold_z = bold_m + np.exp(1.0j * bold_p)
+        bold_z = bold_mag * np.exp(1.0j * bold_phs_rad)
         bold_re, bold_im = np.real(bold_z), np.imag(bold_z)
 
-        # Concatenate real and image channels into double-length 4D image
-        bold_rect_img = np.concatenate([bold_re, bold_im], axis=3)
-
-        # Save rectangular complex BOLD image
-        bold_rect_nii = nib.Nifti1Image(bold_rect_img, affine=bold_pol_nii.affine)
-        nib.save(bold_rect_nii, self._gen_outfile_name())
+        # Save cartesian complex BOLD image
+        bold_re_nii = nib.Nifti1Image(bold_re, affine=bold_mag_nii.affine)
+        nib.save(bold_re_nii, self._gen_real_fname())
+        bold_im_nii = nib.Nifti1Image(bold_im, affine=bold_mag_nii.affine)
+        nib.save(bold_im_nii, self._gen_imag_fname())
 
         return runtime
 
     def _list_outputs(self):
         # Get the outputs dictionary
         outputs = self._outputs().get()
-        outputs["bold_rect"] = self._gen_outfile_name()
+        outputs["bold_re"] = self._gen_real_fname()
+        outputs["bold_im"] = self._gen_imag_fname()
 
         return outputs
 
     @staticmethod
-    def _gen_outfile_name():
-        return Path(os.getcwd()) / 'bold_z_rect.nii.gz'
+    def _gen_real_fname():
+        return Path(os.getcwd()) / 'bold_re.nii.gz'
+
+    @staticmethod
+    def _gen_imag_fname():
+        return Path(os.getcwd()) / 'bold_im.nii.gz'
 
 
-"""
-Complex rectangular (real/imag) to polar (mag/phs) conversion
-"""
+class Cart2PolInputSpec(BaseInterfaceInputSpec):
 
-
-class Rect2PolInputSpec(BaseInterfaceInputSpec):
-    bold_rect = File(
-        desc="4D BOLD rectangular image (real then imag concat in axis 3)",
+    bold_re = File(
+        desc='4D BOLD real image',
+        exists=True,
+        mandatory=True
     )
 
-
-class Rect2PolOutputSpec(TraitedSpec):
-    bold_pol = File(
-        desc='4D BOLD polar image (mag then polar concat in axis 3)',
+    bold_im = File(
+        desc='4D BOLD imaginary image',
         exists=True,
         mandatory=True
     )
 
 
-class Rect2Pol(BaseInterface):
-    input_spec = Rect2PolInputSpec
-    output_spec = Rect2PolOutputSpec
+class Cart2PolOutputSpec(TraitedSpec):
+
+    bold_mag = File(
+        desc="4D BOLD magnitude image",
+    )
+
+    bold_phs_rad = File(
+        desc="4D BOLD phase image (radians)",
+    )
+
+
+class Cart2Pol(BaseInterface):
+
+    input_spec = Cart2PolInputSpec
+    output_spec = Cart2PolOutputSpec
 
     def _run_interface(self, runtime):
 
-        # Load polar complex BOLD image
-        bold_pol_nii = nib.load(self.inputs.bold_pol)
-        bold_pol_img = bold_pol_nii.get_fdata()
-
-        nt = bold_pol_img.shape[3]
-        ht = int(nt/2)
-
-        # Separate into mag and phase arrays
-        bold_m = bold_pol_img[..., :(ht-1)]
-        bold_p = bold_pol_img[..., ht:]
+        # Load 4D real and imag BOLD images
+        bold_re_nii = nib.load(self.inputs.bold_re)
+        bold_re = bold_re_nii.get_fdata()
+        bold_im_nii = nib.load(self.inputs.bold_im)
+        bold_im = bold_im_nii.get_fdata()
 
         # Calculate real and imaginary channels
-        bold_z = bold_m + np.exp(1.0j * bold_p)
-        bold_re, bold_im = np.real(bold_z), np.imag(bold_z)
+        bold_z = bold_re + 1.0j * bold_im
+        bold_mag, bold_phs_rad = np.abs(bold_z), np.angle(bold_z, deg=False)
 
-        # Concatenate real and image channels into double-length 4D image
-        bold_rect_img = np.concatenate([bold_re, bold_im], axis=3)
-
-        # Save rectangular complex BOLD image
-        bold_rect_nii = nib.Nifti1Image(bold_rect_img, affine=bold_pol_nii.affine)
-        nib.save(bold_rect_nii, self._gen_outfile_name())
+        # Save polar complex BOLD image
+        bold_mag_nii = nib.Nifti1Image(bold_mag, affine=bold_re_nii.affine)
+        nib.save(bold_mag_nii, self._gen_mag_fname())
+        bold_phs_rad_nii = nib.Nifti1Image(bold_phs_rad, affine=bold_re_nii.affine)
+        nib.save(bold_phs_rad_nii, self._gen_phs_rad_fname())
 
         return runtime
 
     def _list_outputs(self):
         # Get the outputs dictionary
         outputs = self._outputs().get()
-        outputs["bold_rect"] = self._gen_outfile_name()
+        outputs["bold_mag"] = self._gen_mag_fname()
+        outputs["bold_phs_rad"] = self._gen_phs_rad_fname()
 
         return outputs
 
     @staticmethod
-    def _gen_outfile_name():
-        return Path(os.getcwd()) / 'bold_z_rect.nii.gz'
+    def _gen_mag_fname():
+        return Path(os.getcwd()) / 'bold_mag.nii.gz'
+
+    @staticmethod
+    def _gen_phs_rad_fname():
+        return Path(os.getcwd()) / 'bold_phs_rad.nii.gz'

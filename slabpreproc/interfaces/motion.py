@@ -28,6 +28,7 @@ Output full motion timeseries table as CSV with headers
 
 
 class MotionInputSpec(BaseInterfaceInputSpec):
+
     moco_pars = File(
         desc='FSL motion parameters filename',
         exists=True,
@@ -40,7 +41,7 @@ class MotionInputSpec(BaseInterfaceInputSpec):
         exists=True
     )
 
-    bold_mag_meta = traits.Dict(
+    bold_meta = traits.Dict(
         desc="BOLD timeseries metadata dictionary",
         exists=True,
         mandatory=True
@@ -81,7 +82,7 @@ class Motion(BaseInterface):
         motion_df = moco_df.merge(fd_df, left_index=True, right_index=True)
 
         # Add time column
-        tr_s = self.inputs.bold_mag_meta['RepetitionTime']
+        tr_s = self.inputs.bold_meta['RepetitionTime']
         nt = len(moco_df.index)
         motion_df.insert(0, 'Time_s', np.arange(0, nt).reshape(-1, 1) * tr_s)
 

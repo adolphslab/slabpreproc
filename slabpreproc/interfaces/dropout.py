@@ -32,7 +32,7 @@ class DropoutInputSpec(BaseInterfaceInputSpec):
     )
 
     sbref = File(
-        desc='BOLD SBRef image in template space',
+        desc='BOLD SBRef mag image in template space',
         mandatory=True,
         exists=True
     )
