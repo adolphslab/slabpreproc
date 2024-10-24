@@ -9,9 +9,8 @@ DATES  : 2022-07-23 JMT From scratch
 import os
 import os.path as op
 import shutil
-import bids
-from glob import glob
 
+import bids
 from nipype.interfaces.base import (
     BaseInterface,
     BaseInterfaceInputSpec,
@@ -119,9 +118,14 @@ class DerivativesSorter(BaseInterface):
 
             else:
 
-                # Replace current suffix (eg _bold) with new suffix (eg _recon-preproc_sbref)
-                new_suffix = sort_dict['NewSuffix']
-                out_pstub = op.join(datatype_out_dname, source_bname.replace(old_suffix, new_suffix))
+                # Strip "part-mag" from original BOLD basename
+                # "part-mag" or "part-phase" should be added to the new_suffix in derivatives_wf.py
+                new_bname = source_bname.replace('_part-mag', '').replace('_part-phase', '')
+
+                # Replace old suffix (eg _bold) with new suffix (eg _recon-preproc_sbref)
+                new_bname = new_bname.replace(old_suffix, sort_dict['NewSuffix'])
+
+                out_pstub = op.join(datatype_out_dname, new_bname)
 
                 # File type dependent extensions
                 if 'Text' in sort_dict['FileType']:

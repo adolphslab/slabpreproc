@@ -3,26 +3,21 @@
 Complex-valued functional MRI preprocessing workflow
 """
 
-import numpy as np
-import nipype.pipeline.engine as pe
-import nipype.interfaces.fsl as fsl
 import nipype.interfaces.ants as ants
 import nipype.interfaces.c3 as c3
+import nipype.interfaces.fsl as fsl
 import nipype.interfaces.utility as util
-
+import nipype.pipeline.engine as pe
+import numpy as np
 # fMRIprep (24.2.0) interfaces for one-shot resampling
 from fmriprep.interfaces.resampling import (ResampleSeries, DistortionParameters)
-
+# niworkflows MCFLIRT to ITK conversion
+from niworkflows.interfaces.itk import MCFLIRT2ITK
 # sdcflows TOPUP workflow
 from sdcflows.workflows.fit.pepolar import init_topup_wf
 
-# niworkflows MCFLIRT to ITK conversion
-from niworkflows.interfaces.itk import MCFLIRT2ITK
-
 # Slabpreproc interfaces
-from ..interfaces import TOPUPEncFile
-from ..interfaces import SEEPIRef
-from ..interfaces import LapUnwrap
+from ..interfaces import (TOPUPEncFile, LapUnwrap, TempUnwrap, SEEPIRef)
 
 
 def build_func_preproc_wf(antsthreads=2):
@@ -63,6 +58,9 @@ def build_func_preproc_wf(antsthreads=2):
 
     # Laplacian phase unwrap spatial dimensions prior to any spatial resampling
     lap_unwrap = pe.Node(LapUnwrap(), name='lap_unwrap', terminal_output=None)
+
+    # Temporally phase unwrap and demean prior to spatial resampling
+    temp_unwrap = pe.Node(TempUnwrap(k_t=100), name='temp_unwrap', terminal_output=None)
 
     # Identify SE-EPI fieldmap with same PE direction as BOLD SBRef
     get_seepi_ref = pe.Node(SEEPIRef(), name='get_seepi_ref')
@@ -235,6 +233,9 @@ def build_func_preproc_wf(antsthreads=2):
         # Laplacian unwrap spatial dimensions of BOLD phase timeseries
         (siemens2rads, lap_unwrap, [('out_file', 'phi_w')]),
 
+        # Temporally unwrap and demean BOLD phase timeseries
+        (siemens2rads, temp_unwrap, [('out_file', 'phi_w')]),
+
         # Register the SBRef to the SE-EPI with the same PE direction (typically AP)
         (inputnode, reg_sbref2seepi, [('sbref_mag', 'moving_image')]),
         (get_seepi_ref, reg_sbref2seepi, [('seepi_mag_ref', 'fixed_image')]),
@@ -302,7 +303,8 @@ def build_func_preproc_wf(antsthreads=2):
         (dist_pars, resample_bold_mag, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
 
         # One-shot resample BOLD phase timeseries to template space
-        (lap_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
+        # (lap_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
+        (temp_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
         (inputnode, resample_bold_phs, [('tpl_t2w_head', 'ref_file')]),
         (resample_topup_b0, resample_bold_phs, [('output_image', 'fieldmap')]),
         (itk_hmc_epi2tpl, resample_bold_phs, [('out', 'transforms')]),
