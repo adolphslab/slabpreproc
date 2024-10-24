@@ -21,19 +21,18 @@ def build_derivatives_wf(deriv_dir):
     derivatives_wf = pe.Workflow(name='derivatives_wf')
 
     # Workflow input node
-    in_node = pe.Node(
+    inputnode = pe.Node(
         util.IdentityInterface(
             fields=[
                 'source_file',
                 'tpl_bold_mag_preproc',
                 'tpl_bold_phs_preproc',
-                'tpl_sbref_mag_preproc',
-                'tpl_seepi_mag_preproc',
+                'tpl_epi_ref_preproc',
                 'tpl_bold_mag_tmean',
                 'tpl_bold_mag_tsd',
                 'tpl_bold_mag_tsfnr',
                 'tpl_bold_mag_tsfnr_roistats',
-                'tpl_b0_rads',
+                'tpl_topup_b0_rads',
                 'tpl_dropout',
                 'motion_csv',
                 'tpl_t1w_head',
@@ -46,14 +45,13 @@ def build_derivatives_wf(deriv_dir):
                 'melodic_out_dir'  # Folder - separate handling
             ]
         ),
-        name='in_node'
+        name='inputnode'
     )
 
     # File sorting dictionary list
     file_sort_dicts = [
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_part-mag_bold', 'FileType': 'Image'},
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_part-phase_bold', 'FileType': 'Image'},
-        {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_part-mag_sbref', 'FileType': 'Image'},
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_part-mag_seepi', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tmean_part-mag_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsd_part-mag_bold', 'FileType': 'Image'},
@@ -76,20 +74,20 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'melodic', 'NewSuffix': 'melodic.ica', 'FileType': 'Folder'}
     ]
 
-    # Create a list of all file in_node
+    # Create a list of all file inputnode
     deriv_file_list = pe.Node(
         util.Merge(numinputs=len(file_sort_dicts)),
         name='deriv_file_list'
     )
 
-    # Create a list of all folder in_node
+    # Create a list of all folder inputnode
     deriv_folder_list = pe.Node(
         util.Merge(numinputs=len(folder_sort_dicts)),
         name='deriv_folder_list'
     )
 
     # Build multi-input derivatives output sorter
-    # Renames and sorts in_node into correct derivatives hierarchy
+    # Renames and sorts inputnode into correct derivatives hierarchy
     deriv_sorter = pe.Node(
         DerivativesSorter(
             deriv_dir=deriv_dir,
@@ -103,34 +101,33 @@ def build_derivatives_wf(deriv_dir):
     derivatives_wf.connect([
 
         # Pass source BOLD filename to derivatives sorter as a filename template
-        (in_node, deriv_sorter, [('source_file', 'source_file')]),
+        (inputnode, deriv_sorter, [('source_file', 'source_file')]),
 
         # Create file list and pass to sorter
-        (in_node, deriv_file_list, [
+        (inputnode, deriv_file_list, [
             ('tpl_bold_mag_preproc', 'in1'),
             ('tpl_bold_phs_preproc', 'in2'),
-            ('tpl_sbref_mag_preproc', 'in3'),
-            ('tpl_seepi_mag_preproc', 'in4'),
-            ('tpl_bold_mag_tmean', 'in5'),
-            ('tpl_bold_mag_tsd', 'in6'),
-            ('tpl_bold_mag_tsfnr', 'in7'),
-            ('tpl_bold_mag_tsfnr_roistats', 'in8'),
-            ('tpl_b0_rads', 'in9'),
-            ('tpl_dropout', 'in10'),
-            ('motion_csv', 'in11'),
-            ('tpl_t1w_head', 'in12'),
-            ('tpl_t2w_head', 'in13'),
-            ('tpl_t1w_brain', 'in14'),
-            ('tpl_t2w_brain', 'in15'),
-            ('tpl_pseg', 'in16'),
-            ('tpl_dseg', 'in17'),
-            ('tpl_bmask', 'in18')
+            ('tpl_epi_ref_preproc', 'in3'),
+            ('tpl_bold_mag_tmean', 'in4'),
+            ('tpl_bold_mag_tsd', 'in5'),
+            ('tpl_bold_mag_tsfnr', 'in6'),
+            ('tpl_bold_mag_tsfnr_roistats', 'in7'),
+            ('tpl_topup_b0_rads', 'in8'),
+            ('tpl_dropout', 'in9'),
+            ('motion_csv', 'in10'),
+            ('tpl_t1w_head', 'in11'),
+            ('tpl_t2w_head', 'in12'),
+            ('tpl_t1w_brain', 'in13'),
+            ('tpl_t2w_brain', 'in14'),
+            ('tpl_pseg', 'in15'),
+            ('tpl_dseg', 'in16'),
+            ('tpl_bmask', 'in17')
         ]),
 
         (deriv_file_list, deriv_sorter, [('out', 'file_list')]),
 
         # Create folder list and pass to sorter
-        (in_node, deriv_folder_list, [
+        (inputnode, deriv_folder_list, [
             ('melodic_out_dir', 'in1')
         ]),
 

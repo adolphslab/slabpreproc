@@ -4,17 +4,25 @@ Complex-valued functional MRI preprocessing workflow
 """
 
 import numpy as np
-import nipype.interfaces.utility as util
+import nipype.pipeline.engine as pe
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.ants as ants
-import nipype.pipeline.engine as pe
+import nipype.interfaces.c3 as c3
+import nipype.interfaces.utility as util
 
+# fMRIprep (24.2.0) interfaces for one-shot resampling
+from fmriprep.interfaces.resampling import (ResampleSeries, DistortionParameters)
+
+# sdcflows TOPUP workflow
+from sdcflows.workflows.fit.pepolar import init_topup_wf
+
+# niworkflows MCFLIRT to ITK conversion
+from niworkflows.interfaces.itk import MCFLIRT2ITK
+
+# Slabpreproc interfaces
 from ..interfaces import TOPUPEncFile
 from ..interfaces import SEEPIRef
-from ..interfaces import Pol2Cart
-
-# For later single warp registration of BOLD volumes to individual structural space
-# from niworkflows.interfaces.itk import MCFLIRT2ITK
+from ..interfaces import LapUnwrap
 
 
 def build_func_preproc_wf(antsthreads=2):
@@ -25,14 +33,23 @@ def build_func_preproc_wf(antsthreads=2):
     """
 
     # Workflow input node
-    in_node = pe.Node(
+    inputnode = pe.Node(
         util.IdentityInterface(
             fields=(
-                'bold_mag', 'bold_phs', 'bold_meta',
-                'sbref_mag', 'sbref_phs', 'sbref_meta',
-                'seepi_mag', 'seepi_phs', 'seepi_meta')
+                'bold_mag',
+                'bold_phs',
+                'bold_meta',
+                'sbref_mag',
+                'sbref_phs',
+                'sbref_meta',
+                'seepi_mag_list',
+                'seepi_phs_list',
+                'seepi_meta_list',
+                'ses_t2w_head',
+                'tpl_t2w_head',
+            )
         ),
-        name='in_node'
+        name='inputnode'
     )
 
     # Convert BOLD phase image from Siemens units [-4096, 4096] to radians [-pi, pi]
@@ -44,8 +61,8 @@ def build_func_preproc_wf(antsthreads=2):
         name='siemens2rads'
     )
 
-    # Convert 4D BOLD mag/phs to re/im (polar to cartesian)
-    pol2cart = pe.Node(Pol2Cart(), name='pol2cart', terminal_output=None)
+    # Laplacian phase unwrap spatial dimensions prior to any spatial resampling
+    lap_unwrap = pe.Node(LapUnwrap(), name='lap_unwrap', terminal_output=None)
 
     # Identify SE-EPI fieldmap with same PE direction as BOLD SBRef
     get_seepi_ref = pe.Node(SEEPIRef(), name='get_seepi_ref')
@@ -58,12 +75,6 @@ def build_func_preproc_wf(antsthreads=2):
         terminal_output=None
     )
 
-    # Calculate head motion correction from warped BOLD mag image series
-    # See FMRIB tech report for relative cost function performance
-    # https://www.fmrib.ox.ac.uk/datasets/techrep/tr02mj1/tr02mj1/node27.html
-    # Save rigid transform matrices for motion correction of re, im components
-    hmc_est = pe.Node(fsl.MCFLIRT(cost='normcorr', dof=6, save_mats=True, save_plots=True), name='hmc_est')
-
     # Create an encoding file for SE-EPI fmap correction with TOPUP
     # Use the corrected output from this node as a T2w intermediate reference
     # for registering the unwarped BOLD EPI slab space to the individual T2w template
@@ -72,65 +83,135 @@ def build_func_preproc_wf(antsthreads=2):
     # Create an encoding file for SBRef and BOLD correction with TOPUP
     sbref_enc_file = pe.Node(TOPUPEncFile(), name='sbref_enc_file')
 
-    # Concatenate SE-EPI fieldmap mag images into a single 4D image
-    # Required for FSL TOPUP implementation
-    concat = pe.Node(fsl.Merge(dimension='t', output_type='NIFTI_GZ'), name='concat')
+    # HMC of warped BOLD series using the warped, fmap-aligned SBRef as reference
+    # See FMRIB tech report for relative cost function performance
+    # https://www.fmrib.ox.ac.uk/datasets/techrep/tr02mj1/tr02mj1/node27.html
 
-    # FSL TOPUP correction estimation
-    # This node also returns the corrected SE-EPI images used later for
-    # registration of SE-EPI to SBRef space
-    # Defaults to b02b0.cnf TOPUP config file
-    topup_est = pe.Node(fsl.TOPUP(output_type='NIFTI_GZ'), name='topup_est')
+    hmc_est = pe.Node(
+        fsl.MCFLIRT(
+            cost='normcorr',
+            dof=6,
+            save_mats=True,  # Save rigid transform matrices for single-shot, per-volume resampling
+            save_plots=True
+        ),
+        name='hmc_est'
+    )
 
-    # Average unwarped AP and PA mag SE-EPIs
-    # Use this to register SE-EPI to SBRef space
-    seepi_mag_avg = pe.Node(
+    # Convert mcflirt HMC affine matrices to single ITK text file
+    itk_hmc = pe.Node(
+        MCFLIRT2ITK(),
+        name='itk_hmc'
+    )
+
+    # Get TOPUP distortion parameters from metadata
+    dist_pars = pe.Node(
+        DistortionParameters(),
+        name='dist_pars'
+    )
+
+    # Setup TOPUP SDC workflow
+    topup_wf = init_topup_wf(
+        name='topup_wf',
+        omp_nthreads=1
+    )
+
+    # Average TOPUP unwarped AP/PA mag SE-EPIs
+    epi_uw_ref = pe.Node(
         fsl.maths.MeanImage(dimension='T', output_type='NIFTI_GZ'),
-        name='seepi_mag_avg'
+        name='epi_uw_ref'
     )
 
-    # Split 4D images into sequence of 3D volumes
-    prehmc_4dto3d_re = pe.Node(fsl.Split(dimension='t'), name='prehmc_4dto3d_re')
-    prehmc_4dto3d_im = pe.Node(fsl.Split(dimension='t'), name='prehmc_4dto3d_im')
+    # Estimate rigid body transform from unwarped SE-EPI to session T2w
 
-    # Apply per-volume HMC to real and imag BOLD images
-    apply_hmc_re = pe.MapNode(
-        fsl.ApplyXFM(apply_xfm=True, interp='trilinear'),
-        iterfield=['in_file', 'in_matrix_file'], name='apply_hmc_re',
+    # FLIRT rigid angular search parameters
+    # Restrict search to +/- 6 degrees. Liberal limits for inter-session head rotations
+    alpha_max = 6
+    dalpha_coarse = (2 * alpha_max) // 3 + 1
+    dalpha_fine = (2 * alpha_max) // 12 + 1
+
+    # Estimate rigid transform from T2w EPI to session T2w space
+    # FLIRT rigid body registration preferred over antsAI for partial brain slab data
+    flirt_epi2anat = pe.Node(
+        fsl.FLIRT(
+            dof=6,
+            cost='corratio',
+            interp='spline',
+            uses_qform=True,
+            searchr_x=[-alpha_max, alpha_max],
+            searchr_y=[-alpha_max, alpha_max],
+            searchr_z=[-alpha_max, alpha_max],
+            coarse_search=dalpha_coarse,
+            fine_search=dalpha_fine,
+            out_matrix_file='tx_epi2anat.mat',
+            output_type='NIFTI_GZ',
+            terminal_output='none'
+        ),
+        name='flirt_epi2anat',
     )
-    apply_hmc_im = pe.MapNode(
-        fsl.ApplyXFM(apply_xfm=True, interp='trilinear'),
-        iterfield=['in_file', 'in_matrix_file'], name='apply_hmc_im',
+
+    # Estimate rigid body transform from session T2w to template T2w
+    flirt_anat2tpl = pe.Node(
+        fsl.FLIRT(
+            dof=6,
+            cost='corratio',
+            out_matrix_file='flirt_anat2tpl.mat',
+            output_type='NIFTI_GZ',
+            terminal_output='none'
+        ),
+        name='flirt_anat2tpl',
     )
 
-    # Merge 3D real and imag volumes back to 4D
-    posthmc_3dto4d_re = pe.Node(fsl.Merge(dimension='t'), name='posthmc_3dto4d_re')
-    posthmc_3dto4d_im = pe.Node(fsl.Merge(dimension='t'), name='posthmc_3dto4d_im')
+    # Combine EPI-anat and anat-template rigid transforms
+    # Concatenate EPI to anat and anat to tpl rigid transforms
+    flirt_epi2tpl = pe.Node(fsl.ConvertXFM(
+        out_file='flirt_epi2tpl.mat',
+        concat_xfm=True),
+        name='flirt_epi2tpl'
+    )
 
-    # Apply TOPUP unwarp to 4D BOLD real and imag images
-    unwarp_bold_re = pe.Node(fsl.ApplyTOPUP(method='jac', output_type='NIFTI_GZ'), name='unwarp_bold_re')
-    unwarp_bold_im = pe.Node(fsl.ApplyTOPUP(method='jac', output_type='NIFTI_GZ'), name='unwarp_bold_im')
+    # Convert EPI-to-template rigid transform to ITK format
+    itk_epi2tpl = pe.Node(c3.C3dAffineTool(fsl2ras=True, itk_transform=True), name='itk_epi2tpl')
 
-    # Apply TOPUP correction to SBRef real and imag volumes
-    unwarp_sbref = pe.Node(fsl.ApplyTOPUP(method='jac', output_type='NIFTI_GZ'), name='unwarp_sbref')
+    # Make list from ITK HMC transforms and EPI-to-template transform
+    # Pass this list to fmriprep ResampleSeries interface (transforms arg)
+    itk_hmc_epi2tpl = pe.Node(util.Merge(2), name='itk_hmc_epi2tpl', run_without_submitting=True)
 
-    # Derive signal dropout map from TOPUP B0 field estimate
-    # JMT Consider deriving from high resolution MEMPRAGE B0 map
+    # Resample B0 fieldmap and EPI reference to template space
+    resample_topup_b0 = pe.Node(
+        ants.ApplyTransforms(num_threads=antsthreads),
+        name='resample_topup_b0'
+    )
+    resample_epi_ref = pe.Node(
+        ants.ApplyTransforms(num_threads=antsthreads),
+        name='resample_epi_ref'
+    )
+
+    # Rescale template-space B0 map from Hz to rad/s
     hz2rads = pe.Node(fsl.ImageMaths(op_string=f'-mul {2.0 * np.pi}'), name='hz2rads')
 
+    # One-shot resample BOLD timeseries to template space (including HMC and SDC)
+    resample_bold_mag = pe.Node(
+        ResampleSeries(jacobian=True, num_threads=antsthreads),
+        name='resample_bold_mag'
+    )
+    resample_bold_phs = pe.Node(
+        ResampleSeries(jacobian=False, num_threads=antsthreads),
+        name='resample_bold_phs'
+    )
+
     # Workflow output node
-    out_node = pe.Node(
+    outputnode = pe.Node(
         util.IdentityInterface(
             fields=(
-                'bold_re_preproc',
-                'bold_im_preproc',
-                'sbref_mag_preproc',
-                'seepi_mag_preproc',
+                'tpl_bold_mag_preproc',
+                'tpl_bold_phs_preproc',
+                'tpl_sbref_mag_preproc',
+                'tpl_epi_ref_preproc',
+                'tpl_topup_b0_rads',
                 'moco_pars',
-                'topup_b0_rads'
             ),
         ),
-        name='out_node'
+        name='outputnode'
     )
 
     #
@@ -142,91 +223,97 @@ def build_func_preproc_wf(antsthreads=2):
     func_preproc_wf.connect([
 
         # Extract the first fmap in the list to use as a BOLD to fmap registration reference
-        (in_node, get_seepi_ref, [
-            ('seepi_mag', 'seepi_mag'),
-            ('seepi_meta', 'seepi_meta'),
+        (inputnode, get_seepi_ref, [
+            ('seepi_mag_list', 'seepi_mag_list'),
+            ('seepi_meta_list', 'seepi_meta_list'),
             ('sbref_meta', 'sbref_meta')
         ]),
 
         # Convert BOLD phase from Siemens units to radians
-        (in_node, siemens2rads, [('bold_phs', 'in_file')]),
+        (inputnode, siemens2rads, [('bold_phs', 'in_file')]),
 
-        # Convert BOLD from mag/phs to re/im
-        (in_node, pol2cart, [('bold_mag', 'bold_mag')]),
-        (siemens2rads, pol2cart, [('out_file', 'bold_phs_rad')]),
+        # Laplacian unwrap spatial dimensions of BOLD phase timeseries
+        (siemens2rads, lap_unwrap, [('out_file', 'phi_w')]),
 
-        # Register the SBRef to the SE-EPI with the same PE direction
-        (in_node, reg_sbref2seepi, [('sbref_mag', 'moving_image')]),
+        # Register the SBRef to the SE-EPI with the same PE direction (typically AP)
+        (inputnode, reg_sbref2seepi, [('sbref_mag', 'moving_image')]),
         (get_seepi_ref, reg_sbref2seepi, [('seepi_mag_ref', 'fixed_image')]),
 
-        # Estimate HMC of BOLD mag volumes relative to mean SE-EPI mag
-        (in_node, hmc_est, [('bold_mag', 'in_file')]),
+        # Estimate HMC transforms of BOLD AP mag volumes to SBRef AP in SE-EPI AP space
+        (inputnode, hmc_est, [('bold_mag', 'in_file')]),
         (reg_sbref2seepi, hmc_est, [('warped_image', 'ref_file')]),
 
-        # Split BOLD re/im series into 3D volumes
-        (pol2cart, prehmc_4dto3d_re, [('bold_re', 'in_file')]),
-        (pol2cart, prehmc_4dto3d_im, [('bold_im', 'in_file')]),
-
-        # Apply per-volume HMC to BOLD re/im series
-        (prehmc_4dto3d_re, apply_hmc_re, [('out_files', 'in_file')]),
-        (prehmc_4dto3d_im, apply_hmc_im, [('out_files', 'in_file')]),
-        (reg_sbref2seepi, apply_hmc_re, [('warped_image', 'reference')]),
-        (reg_sbref2seepi, apply_hmc_im, [('warped_image', 'reference')]),
-        (hmc_est, apply_hmc_re, [('mat_file', 'in_matrix_file')]),
-        (hmc_est, apply_hmc_im, [('mat_file', 'in_matrix_file')]),
-
-        # Merge BOLD re/im series back into 4D
-        (apply_hmc_re, posthmc_3dto4d_re, [('out_file', 'in_files')]),
-        (apply_hmc_im, posthmc_3dto4d_im, [('out_file', 'in_files')]),
-
-        # Create TOPUP encoding files
-        # Requires both the image to be unwarped and the metadata for that image
-        (in_node, sbref_enc_file, [('sbref_mag', 'epi_list')]),
-        (in_node, sbref_enc_file, [('sbref_meta', 'meta_list')]),
-        (in_node, seepi_enc_file, [('seepi_mag', 'epi_list')]),
-        (in_node, seepi_enc_file, [('seepi_meta', 'meta_list')]),
-
-        # Estimate TOPUP corrections from SE-EPI mag images
-        # FUTURE: upgrade to complex TOPUP when implemented
-        (in_node, concat, [('seepi_mag', 'in_files')]),
-        (concat, topup_est, [('merged_file', 'in_file')]),
-        (seepi_enc_file, topup_est, [('encoding_file', 'encoding_file')]),
-
-        # Create SE-EPI mag reference (mean of unwarped SE-EPI mag images)
-        (topup_est, seepi_mag_avg, [('out_corrected', 'in_file')]),
-
-        # Apply TOPUP correction to real and imag HMC BOLD
-        (topup_est, unwarp_bold_re, [
-            ('out_fieldcoef', 'in_topup_fieldcoef'),
-            ('out_movpar', 'in_topup_movpar')
+        # Convert MCFLIRT matrix list to single ITK transform file
+        (hmc_est, itk_hmc, [('mat_file', 'in_files')]),
+        (reg_sbref2seepi, itk_hmc, [
+            ('warped_image', 'in_reference'),
+            ('warped_image', 'in_source'),
         ]),
-        (topup_est, unwarp_bold_im, [
-            ('out_fieldcoef', 'in_topup_fieldcoef'),
-            ('out_movpar', 'in_topup_movpar')
-        ]),
-        (sbref_enc_file, unwarp_bold_re, [('encoding_file', 'encoding_file')]),
-        (sbref_enc_file, unwarp_bold_im, [('encoding_file', 'encoding_file')]),
-        (posthmc_3dto4d_re, unwarp_bold_re, [('merged_file', 'in_files')]),
-        (posthmc_3dto4d_im, unwarp_bold_im, [('merged_file', 'in_files')]),
 
-        # Apply TOPUP correction to SBRef
-        (topup_est, unwarp_sbref, [
-            ('out_fieldcoef', 'in_topup_fieldcoef'),
-            ('out_movpar', 'in_topup_movpar')
+        # Estimate TOPUP warp correction from SE-EPI pair
+        (inputnode, topup_wf, [
+            ('seepi_mag_list', 'inputnode.in_data'),
+            ('seepi_meta_list', 'inputnode.metadata'),
         ]),
-        (sbref_enc_file, unwarp_sbref, [('encoding_file', 'encoding_file')]),
-        (in_node, unwarp_sbref, [('sbref_mag', 'in_files')]),
 
-        # Rescale TOPUP B0 map from Hz to rad/s
-        (topup_est, hz2rads, [('out_field', 'in_file')]),
+        # Create T2w EPI mag reference (mean of AP and PA SE-EPIs)
+        (topup_wf, epi_uw_ref, [('outputnode.fmap_ref', 'in_file')]),
+
+        # Register EPI T2w  to session T2w
+        (epi_uw_ref, flirt_epi2anat, [('out_file', 'in_file')]),
+        (inputnode, flirt_epi2anat, [('ses_t2w_head', 'reference')]),
+
+        # Register session T2w to template T2w
+        (inputnode, flirt_anat2tpl, [('ses_t2w_head', 'in_file'), ('tpl_t2w_head', 'reference'),]),
+
+        # Merge EPI-anat and anat-template rigid transforms (FSL/FLIRT format)
+        (flirt_epi2anat, flirt_epi2tpl, [('out_matrix_file', 'in_file')]),
+        (flirt_anat2tpl, flirt_epi2tpl, [('out_matrix_file', 'in_file2')]),
+
+        # Convert EPI to template transform from FSL to ITK format
+        (flirt_epi2tpl, itk_epi2tpl, [('out_file', 'transform_file')]),
+        (epi_uw_ref, itk_epi2tpl, [('out_file', 'source_file')]),
+        (inputnode, itk_epi2tpl, [('tpl_t2w_head', 'reference_file')]),
+
+        # Resample EPI reference to template space
+        (epi_uw_ref, resample_epi_ref, [('out_file', 'input_image')]),
+        (inputnode, resample_epi_ref, [('tpl_t2w_head', 'reference_image')]),
+        (itk_epi2tpl, resample_epi_ref, [('itk_transform', 'transforms')]),
+
+        # Resample B0 map (Hz) to template space (for one-shot BOLD resampling)
+        (topup_wf, resample_topup_b0, [('outputnode.fmap', 'input_image')]),
+        (inputnode, resample_topup_b0, [('tpl_t2w_head', 'reference_image')]),
+        (itk_epi2tpl, resample_topup_b0, [('itk_transform', 'transforms')]),
+
+        # Rescale template-space B0 map from Hz to rad/s
+        (resample_topup_b0, hz2rads, [('output_image', 'in_file')]),
+
+        # Make a two-element list of HMC and EPI-to-template ITK transforms
+        (itk_hmc, itk_hmc_epi2tpl, [('out_file', 'in1')]),
+        (itk_epi2tpl, itk_hmc_epi2tpl, [('itk_transform', 'in2')]),
+
+        # Extract distortion parameters from BOLD metadata
+        (inputnode, dist_pars, [('bold_meta', 'metadata')]),
+
+        # One-shot resample BOLD mag timeseries to template space
+        (inputnode, resample_bold_mag, [('bold_mag', 'in_file'), ('tpl_t2w_head', 'ref_file')]),
+        (resample_topup_b0, resample_bold_mag, [('output_image', 'fieldmap')]),
+        (itk_hmc_epi2tpl, resample_bold_mag, [('out', 'transforms')]),
+        (dist_pars, resample_bold_mag, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
+
+        # One-shot resample BOLD phase timeseries to template space
+        (lap_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
+        (inputnode, resample_bold_phs, [('tpl_t2w_head', 'ref_file')]),
+        (resample_topup_b0, resample_bold_phs, [('output_image', 'fieldmap')]),
+        (itk_hmc_epi2tpl, resample_bold_phs, [('out', 'transforms')]),
+        (dist_pars, resample_bold_phs, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
 
         # Output results
-        (unwarp_bold_re, out_node, [('out_corrected', 'bold_re_preproc')]),
-        (unwarp_bold_im, out_node, [('out_corrected', 'bold_im_preproc')]),
-        (unwarp_sbref, out_node, [('out_corrected', 'sbref_mag_preproc')]),
-        (seepi_mag_avg, out_node, [('out_file', 'seepi_mag_preproc')]),
-        (hz2rads, out_node, [('out_file', 'topup_b0_rads')]),
-        (hmc_est, out_node, [('par_file', 'moco_pars')]),
+        (resample_bold_mag, outputnode, [('out_file', 'tpl_bold_mag_preproc')]),
+        (resample_bold_phs, outputnode, [('out_file', 'tpl_bold_phs_preproc')]),
+        (resample_epi_ref, outputnode, [('output_image', 'tpl_epi_ref_preproc')]),
+        (hz2rads, outputnode, [('out_file', 'tpl_topup_b0_rads')]),
+        (hmc_est, outputnode, [('par_file', 'moco_pars')]),
     ])
 
     return func_preproc_wf

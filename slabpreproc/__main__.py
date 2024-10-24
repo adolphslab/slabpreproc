@@ -260,7 +260,7 @@ def main():
         sbref_phs_path = sbref_phs[0].path
         sbref_meta = sbref_mag[0].get_metadata()
 
-        # Find associated SE-EPI mag fieldmaps
+        # Find SE-EPI mag fieldmaps for this (subj, sess, task)
         bids_filter = {
             'datatype': 'fmap',
             'suffix': 'epi',
@@ -269,45 +269,45 @@ def main():
             'acquisition': task_id
         }
         seepi_mag = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        assert len(seepi_mag) == 2, 'Fewer than 2 SE-EPI mag fieldmaps found'
+        assert len(seepi_mag) >= 2, 'Fewer than 2 SE-EPI mag fieldmaps found'
 
         # Find associated SE-EPI phase fieldmaps
         bids_filter['part'] = 'phase'
         seepi_phs = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        assert len(seepi_phs) == 2, 'Fewer than 2 SE-EPI phase fieldmaps found'
+        assert len(seepi_phs) >= 2, 'Fewer than 2 SE-EPI phase fieldmaps found'
 
-        # Create fieldmap path and metadata lists
-        seepi_mag_path = [fm.path for fm in seepi_mag]
-        seepi_phs_path = [fp.path for fp in seepi_phs]
-        seepi_meta = [fm.get_metadata() for fm in seepi_mag]
+        # Create SE-EPI fieldmap path and metadata lists
+        seepi_mag_list = [fm.path for fm in seepi_mag]
+        seepi_phs_list = [fp.path for fp in seepi_phs]
+        seepi_meta_list = [fm.get_metadata() for fm in seepi_mag]
 
         # Build the subcortical QC workflow
         func_wf = build_func_wf(bold_work_dir, slab_der_dir, bold_meta, args.melodic, args.antsthreads)
 
         # Supply inputs to func_wf
-        func_wf.inputs.in_node.subject_id = subj_id
-        func_wf.inputs.in_node.fs_subjects_dir = fs_subjects_dir
-        func_wf.inputs.in_node.bold_mag = bold_mag_path
-        func_wf.inputs.in_node.bold_phs = bold_phs_path
-        func_wf.inputs.in_node.bold_meta = bold_meta
-        func_wf.inputs.in_node.sbref_mag = sbref_mag_path
-        func_wf.inputs.in_node.sbref_phs = sbref_phs_path
-        func_wf.inputs.in_node.sbref_meta = sbref_meta
-        func_wf.inputs.in_node.seepi_mag = seepi_mag_path
-        func_wf.inputs.in_node.seepi_phs = seepi_phs_path
-        func_wf.inputs.in_node.seepi_meta = seepi_meta
-        func_wf.inputs.in_node.tpl_t1w_head = tpl_t1w_head_path
-        func_wf.inputs.in_node.tpl_t2w_head = tpl_t2w_head_path
-        func_wf.inputs.in_node.tpl_t1w_brain = tpl_t1w_brain_path
-        func_wf.inputs.in_node.tpl_t2w_brain = tpl_t2w_brain_path
-        func_wf.inputs.in_node.tpl_pseg = tpl_pseg_path
-        func_wf.inputs.in_node.tpl_dseg = tpl_dseg_path
-        func_wf.inputs.in_node.tpl_bmask = tpl_bmask_path
-        func_wf.inputs.in_node.fs_t1w_head = fs_t1w_head_path
-        func_wf.inputs.in_node.ses_t2w_head = ses_t2w_head_path
+        func_wf.inputs.inputnode.subject_id = subj_id
+        func_wf.inputs.inputnode.fs_subjects_dir = fs_subjects_dir
+        func_wf.inputs.inputnode.bold_mag = bold_mag_path
+        func_wf.inputs.inputnode.bold_phs = bold_phs_path
+        func_wf.inputs.inputnode.bold_meta = bold_meta
+        func_wf.inputs.inputnode.sbref_mag = sbref_mag_path
+        func_wf.inputs.inputnode.sbref_phs = sbref_phs_path
+        func_wf.inputs.inputnode.sbref_meta = sbref_meta
+        func_wf.inputs.inputnode.seepi_mag_list = seepi_mag_list
+        func_wf.inputs.inputnode.seepi_phs_list = seepi_phs_list
+        func_wf.inputs.inputnode.seepi_meta_list = seepi_meta_list
+        func_wf.inputs.inputnode.tpl_t1w_head = tpl_t1w_head_path
+        func_wf.inputs.inputnode.tpl_t2w_head = tpl_t2w_head_path
+        func_wf.inputs.inputnode.tpl_t1w_brain = tpl_t1w_brain_path
+        func_wf.inputs.inputnode.tpl_t2w_brain = tpl_t2w_brain_path
+        func_wf.inputs.inputnode.tpl_pseg = tpl_pseg_path
+        func_wf.inputs.inputnode.tpl_dseg = tpl_dseg_path
+        func_wf.inputs.inputnode.tpl_bmask = tpl_bmask_path
+        func_wf.inputs.inputnode.fs_t1w_head = fs_t1w_head_path
+        func_wf.inputs.inputnode.ses_t2w_head = ses_t2w_head_path
 
         # Run workflow
-        # Workflow outputs are stored in the BIDS derivatives/slabpreproc folder
+        # Outputs are stored in the BIDS derivatives/slabpreproc folder tree
         func_wf.run()
 
 

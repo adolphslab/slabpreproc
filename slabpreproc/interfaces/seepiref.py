@@ -24,14 +24,14 @@ Use the SBRef for the BOLD series for PE info
 
 class SEEPIRefInputSpec(BaseInterfaceInputSpec):
 
-    seepi_mag = InputMultiPath(
+    seepi_mag_list = InputMultiPath(
         File(exists=True),
         copyfile=False,
-        desc='List of SE-EPI fieldmap Nifti files',
+        desc='List of SE-EPI fieldmap Nifti path names',
         mandatory=True
     )
 
-    seepi_meta = InputMultiObject(
+    seepi_meta_list = InputMultiObject(
         traits.DictStrAny,
         mandatory=True,
         desc="List of SE-EPI fieldmap metadata dictionaries",
@@ -72,9 +72,9 @@ class SEEPIRef(BaseInterface):
         sbref_pe_dir = self.inputs.sbref_meta['PhaseEncodingDirection']
 
         # Loop over SE-EPI metadata extracting PE directions
-        for fc, seepi_mag_fname in enumerate(self.inputs.seepi_mag):
+        for fc, seepi_mag_fname in enumerate(self.inputs.seepi_mag_list):
 
-            fmap_meta = self.inputs.seepi_meta[fc]
+            fmap_meta = self.inputs.seepi_meta_list[fc]
             fmap_pe_dir = fmap_meta['PhaseEncodingDirection']
 
             if fmap_pe_dir == sbref_pe_dir:
