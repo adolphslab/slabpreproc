@@ -32,18 +32,18 @@ SOFTWARE.
 
 import os
 
-from .qc_wf import build_qc_wf
-from .func_preproc_wf import build_func_preproc_wf
+import nipype.interfaces.utility as util
+import nipype.pipeline.engine as pe
+
 from .derivatives_wf import build_derivatives_wf
+from .func_preproc_wf import build_func_preproc_wf
 from .melodic_wf import build_melodic_wf
+from .qc_wf import build_qc_wf
+from ..interfaces.summaryreport import SummaryReport
+
 
 # WIP
 # from .surface_wf import build_surface_wf
-
-from ..interfaces.summaryreport import SummaryReport
-
-import nipype.interfaces.utility as util
-import nipype.pipeline.engine as pe
 
 
 def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthreads=2):
@@ -159,6 +159,7 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthread
         (func_preproc_wf, derivatives_wf, [
             ('outputnode.tpl_bold_mag_preproc', 'inputnode.tpl_bold_mag_preproc'),
             ('outputnode.tpl_bold_phs_preproc', 'inputnode.tpl_bold_phs_preproc'),
+            ('outputnode.tpl_bold_dphi_preproc', 'inputnode.tpl_bold_dphi_preproc'),
             ('outputnode.tpl_epi_ref_preproc', 'inputnode.tpl_epi_ref_preproc'),
             ('outputnode.tpl_topup_b0_rads', 'inputnode.tpl_topup_b0_rads')
         ]),

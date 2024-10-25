@@ -154,3 +154,67 @@ class Cart2Pol(BaseInterface):
     @staticmethod
     def _gen_phs_rad_fname():
         return Path(os.getcwd()) / 'bold_phs_rad.nii.gz'
+
+
+class ComplexPhaseDifferenceInputSpec(BaseInterfaceInputSpec):
+    mag = File(
+        desc='3D x time magnitude image',
+        exists=True,
+        mandatory=True
+    )
+
+    phi_w = File(
+        desc='Wrapped 3D x time phase image (radians)',
+        exists=True,
+        mandatory=True
+    )
+
+
+class ComplexPhaseDifferenceOutputSpec(TraitedSpec):
+    dphi = File(
+        desc="Complex phase difference with first volume",
+    )
+
+
+class ComplexPhaseDifference(BaseInterface):
+    input_spec = ComplexPhaseDifferenceInputSpec
+    output_spec = ComplexPhaseDifferenceOutputSpec
+
+    def _run_interface(self, runtime):
+        # Load 3D x time mag images
+        mag_nii = nib.load(self.inputs.mag)
+        mag = mag_nii.get_fdata()
+
+        # Load 3D x time wrapped phase images (radians)
+        phi_w_nii = nib.load(self.inputs.phi_w)
+        phi_w = phi_w_nii.get_fdata()
+
+        # Complex division by first volume
+        z_0 = mag[..., 0] * np.exp(1j * phi_w[..., 0])
+        nonzero = np.abs(z_0) > 0.0
+
+        dphi = np.zeros_like(phi_w)
+
+        nt = mag.shape[3]
+        for tc in range(nt):
+            z_t = mag[nonzero, tc] * np.exp(1j * phi_w[nonzero, tc])
+            dphi[nonzero, tc] = np.angle(z_t / z_0[nonzero])
+
+        dphi[np.isnan(dphi)] = 0.0
+
+        # Save unwrapped phase image (radians)
+        dphi_nii = nib.Nifti1Image(dphi, affine=mag_nii.affine)
+        nib.save(dphi_nii, self._gen_dphi_fname())
+
+        return runtime
+
+    def _list_outputs(self):
+        # Get the outputs dictionary
+        outputs = self._outputs().get()
+        outputs["dphi"] = self._gen_dphi_fname()
+
+        return outputs
+
+    @staticmethod
+    def _gen_dphi_fname():
+        return Path(os.getcwd()) / 'dphi.nii.gz'

@@ -17,7 +17,7 @@ from niworkflows.interfaces.itk import MCFLIRT2ITK
 from sdcflows.workflows.fit.pepolar import init_topup_wf
 
 # Slabpreproc interfaces
-from ..interfaces import (TOPUPEncFile, LapUnwrap, TempUnwrap, SEEPIRef)
+from ..interfaces import (TOPUPEncFile, LapUnwrap, ComplexPhaseDifference, SEEPIRef)
 
 
 def build_func_preproc_wf(antsthreads=2):
@@ -59,8 +59,8 @@ def build_func_preproc_wf(antsthreads=2):
     # Laplacian phase unwrap spatial dimensions prior to any spatial resampling
     lap_unwrap = pe.Node(LapUnwrap(), name='lap_unwrap', terminal_output=None)
 
-    # Temporally phase unwrap and demean prior to spatial resampling
-    temp_unwrap = pe.Node(TempUnwrap(k_t=100), name='temp_unwrap', terminal_output=None)
+    # Complex phase difference with first volume (radians)
+    dphi = pe.Node(ComplexPhaseDifference(), name='dphi', terminal_output=None)
 
     # Identify SE-EPI fieldmap with same PE direction as BOLD SBRef
     get_seepi_ref = pe.Node(SEEPIRef(), name='get_seepi_ref')
@@ -196,6 +196,10 @@ def build_func_preproc_wf(antsthreads=2):
         ResampleSeries(jacobian=False, num_threads=antsthreads),
         name='resample_bold_phs'
     )
+    resample_bold_dphi = pe.Node(
+        ResampleSeries(jacobian=False, num_threads=antsthreads),
+        name='resample_bold_dphi'
+    )
 
     # Workflow output node
     outputnode = pe.Node(
@@ -203,6 +207,7 @@ def build_func_preproc_wf(antsthreads=2):
             fields=(
                 'tpl_bold_mag_preproc',
                 'tpl_bold_phs_preproc',
+                'tpl_bold_dphi_preproc',
                 'tpl_sbref_mag_preproc',
                 'tpl_epi_ref_preproc',
                 'tpl_topup_b0_rads',
@@ -233,8 +238,9 @@ def build_func_preproc_wf(antsthreads=2):
         # Laplacian unwrap spatial dimensions of BOLD phase timeseries
         (siemens2rads, lap_unwrap, [('out_file', 'phi_w')]),
 
-        # Temporally unwrap and demean BOLD phase timeseries
-        (siemens2rads, temp_unwrap, [('out_file', 'phi_w')]),
+        # Complex phase difference with first volume
+        (inputnode, dphi, [('bold_mag', 'mag')]),
+        (siemens2rads, dphi, [('out_file', 'phi_w')]),
 
         # Register the SBRef to the SE-EPI with the same PE direction (typically AP)
         (inputnode, reg_sbref2seepi, [('sbref_mag', 'moving_image')]),
@@ -303,16 +309,23 @@ def build_func_preproc_wf(antsthreads=2):
         (dist_pars, resample_bold_mag, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
 
         # One-shot resample BOLD phase timeseries to template space
-        # (lap_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
-        (temp_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
+        (lap_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
         (inputnode, resample_bold_phs, [('tpl_t2w_head', 'ref_file')]),
         (resample_topup_b0, resample_bold_phs, [('output_image', 'fieldmap')]),
         (itk_hmc_epi2tpl, resample_bold_phs, [('out', 'transforms')]),
-        (dist_pars, resample_bold_phs, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
+        (dist_pars, resample_bold_phs, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir')]),
+
+        # One-shot resample BOLD phase timeseries to template space
+        (dphi, resample_bold_dphi, [('dphi', 'in_file')]),
+        (inputnode, resample_bold_dphi, [('tpl_t2w_head', 'ref_file')]),
+        (resample_topup_b0, resample_bold_dphi, [('output_image', 'fieldmap')]),
+        (itk_hmc_epi2tpl, resample_bold_dphi, [('out', 'transforms')]),
+        (dist_pars, resample_bold_dphi, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir')]),
 
         # Output results
         (resample_bold_mag, outputnode, [('out_file', 'tpl_bold_mag_preproc')]),
         (resample_bold_phs, outputnode, [('out_file', 'tpl_bold_phs_preproc')]),
+        (resample_bold_dphi, outputnode, [('out_file', 'tpl_bold_dphi_preproc')]),
         (resample_epi_ref, outputnode, [('output_image', 'tpl_epi_ref_preproc')]),
         (hz2rads, outputnode, [('out_file', 'tpl_topup_b0_rads')]),
         (hmc_est, outputnode, [('par_file', 'moco_pars')]),
