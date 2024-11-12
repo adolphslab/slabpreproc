@@ -6,9 +6,10 @@ See:
   https://github.com/pypa/sampleproject
 """
 
+from os import path
+
 # Always prefer setuptools over distutils
 from setuptools import setup, find_packages
-from os import path
 
 # io.open is needed for projects that support Python 2.7
 # It ensures open() defaults to text mode with universal newlines,
@@ -45,7 +46,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='2024.8.3',  # Required
+    version='2024.11.12',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:

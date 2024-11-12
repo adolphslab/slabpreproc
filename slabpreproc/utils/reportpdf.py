@@ -37,23 +37,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import os
-import bids
-import os.path as op
 import datetime as dt
-import pandas as pd
-import nibabel as nib
+import os
+import os.path as op
 
+import bids
+import nibabel as nib
+import pandas as pd
 from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
 from reportlab.platypus import (SimpleDocTemplate,
                                 Paragraph,
                                 Spacer,
                                 Image,
                                 Table,
                                 PageBreak)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
 
 from ..utils import graphics
 
@@ -230,8 +230,8 @@ class ReportPDF:
 
     def _add_image_montages(self):
 
-        # Get slab limits from mean SE-EPI and use for all montages
-        zlims = graphics.crop_to_slab(self._report_files['mSEEPI'])
+        # Get slab limits from SE-EPI reference and use for all montages
+        zlims = graphics.crop_to_slab(self._report_files['SEEPIRef'])
 
         self._section_title('Anatomic Templates', page_break=True)
         self._add_montage(img_name='T1wHead', title='T1w Head', colormap='gray', zlims=zlims)
@@ -242,7 +242,8 @@ class ReportPDF:
                           title='Atlas Labels', colormap='rainbow', zlims=zlims, scaling='default')
 
         self._section_title('Preprocessed EPI', page_break=True)
-        self._add_montage(img_name='mSEEPI', title='Mean SE-EPI', colormap='gray', zlims=zlims)
+        self._add_montage(img_name='SEEPIRef', title='SE-EPI reference', colormap='gray', zlims=zlims)
+        self._add_montage(img_name='SBRef', title='Single-band reference', colormap='gray', zlims=zlims)
         self._add_montage(img_name='tMean', title='Temporal mean BOLD', colormap='gray', zlims=zlims)
 
         self._section_title('Fieldmaps', page_break=True)

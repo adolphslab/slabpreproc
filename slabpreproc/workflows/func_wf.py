@@ -32,22 +32,21 @@ SOFTWARE.
 
 import os
 
-from .qc_wf import build_qc_wf
-from .func_preproc_wf import build_func_preproc_wf
-from .registration_wf import build_reg_epi2tpl_wf
+import nipype.interfaces.utility as util
+import nipype.pipeline.engine as pe
+
 from .derivatives_wf import build_derivatives_wf
+from .func_preproc_wf import build_func_preproc_wf
 from .melodic_wf import build_melodic_wf
+from .qc_wf import build_qc_wf
+from ..interfaces.summaryreport import SummaryReport
+
 
 # WIP
 # from .surface_wf import build_surface_wf
 
-from ..interfaces.summaryreport import SummaryReport
 
-import nipype.interfaces.utility as util
-import nipype.pipeline.engine as pe
-
-
-def build_func_wf(bold_work_dir, deriv_dir, bold_mag_meta, antsthreads=2):
+def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthreads=2):
     """
     Build main subcortical QC workflow
 
@@ -55,25 +54,30 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_mag_meta, antsthreads=2):
         Path to working directory for this BOLD series
     :param deriv_dir: str
         Path to derivatives directory
-    :param bold_mag_meta: dict
+    :param bold_meta: dict
         BOLD magnitude image metadata
+    :param melodic: bool
+        Melodic ICA run flag
     :param antsthreads: int
         Maximum number of threads allowed
     :return:
     """
 
     # Workflow input node
-    in_node = pe.Node(
+    inputnode = pe.Node(
         util.IdentityInterface(
             fields=[
                 'subject_id',
                 'fs_subjects_dir',
                 'bold_mag',
-                'bold_mag_meta',
-                'sbref',
+                'bold_phs',
+                'bold_meta',
+                'sbref_mag',
+                'sbref_phs',
                 'sbref_meta',
-                'seepis',
-                'seepis_meta',
+                'seepi_mag_list',
+                'seepi_phs_list',
+                'seepi_meta_list',
                 'tpl_t1w_head',
                 'tpl_t2w_head',
                 'tpl_t1w_brain',
@@ -85,18 +89,19 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_mag_meta, antsthreads=2):
                 'ses_t2w_head',
             ]
         ),
-        name='in_node'
+        name='inputnode'
     )
 
     # Extract TR in seconds from metadata for melodic
-    tr_s = bold_mag_meta['RepetitionTime']
+    tr_s = bold_meta['RepetitionTime']
 
     # Sub-workflows setup
     func_preproc_wf = build_func_preproc_wf(antsthreads=antsthreads)
-    reg_epi2tpl_wf = build_reg_epi2tpl_wf(antsthreads=antsthreads)
     qc_wf = build_qc_wf()
-    melodic_wf = build_melodic_wf(tr_s=tr_s)
     derivatives_wf = build_derivatives_wf(deriv_dir)
+
+    # Optional MELODIC ICA workflow
+    melodic_wf = build_melodic_wf(tr_s=tr_s)
 
     # Summary report node
     summary_report = pe.Node(
@@ -113,128 +118,126 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_mag_meta, antsthreads=2):
 
     func_wf.connect([
 
-        # Func workflow in_node
-        (in_node, func_preproc_wf, [
-            ('bold_mag', 'in_node.bold_mag'),
-            ('bold_mag_meta', 'in_node.bold_mag_meta'),
-            ('sbref', 'in_node.sbref'),
-            ('sbref_meta', 'in_node.sbref_meta'),
-            ('seepis', 'in_node.seepis'),
-            ('seepis_meta', 'in_node.seepis_meta')
+        # Func workflow inputnode
+        (inputnode, func_preproc_wf, [
+            ('bold_mag',   'inputnode.bold_mag'),
+            ('bold_phs',   'inputnode.bold_phs'),
+            ('bold_meta',  'inputnode.bold_meta'),
+            ('sbref_mag',  'inputnode.sbref_mag'),
+            ('sbref_phs',  'inputnode.sbref_phs'),
+            ('sbref_meta', 'inputnode.sbref_meta'),
+            ('seepi_mag_list',   'inputnode.seepi_mag_list'),
+            ('seepi_phs_list',   'inputnode.seepi_phs_list'),
+            ('seepi_meta_list',  'inputnode.seepi_meta_list')
         ]),
 
         # Pass session to template T2 registration info
-        (in_node, reg_epi2tpl_wf, [
-            ('ses_t2w_head', 'in_node.ses_t2w_head'),
-            ('tpl_t2w_head', 'in_node.tpl_t2w_head'),
-        ]),
-
-        # Pass preprocessed (motion and distortion corrected) BOLD and SBRef images
-        # to template registration workflow
-        (func_preproc_wf, reg_epi2tpl_wf, [
-            ('out_node.sbref_preproc', 'in_node.sbref_preproc'),
-            ('out_node.bold_mag_preproc', 'in_node.bold_mag_preproc'),
-            ('out_node.seepi_preproc', 'in_node.seepi_preproc'),
-            ('out_node.topup_b0_rads', 'in_node.topup_b0_rads')
+        (inputnode, func_preproc_wf, [
+            ('ses_t2w_head', 'inputnode.ses_t2w_head'),
+            ('tpl_t2w_head', 'inputnode.tpl_t2w_head'),
         ]),
 
         # Connect QC workflow
-        (in_node, qc_wf, [
-            ('bold_mag_meta', 'in_node.bold_mag_meta'),
-            ('tpl_dseg', 'in_node.tpl_dseg'),
-            ('tpl_bmask', 'in_node.tpl_bmask')
+        (inputnode, qc_wf, [
+            ('bold_meta', 'inputnode.bold_meta'),
+            ('tpl_dseg', 'inputnode.tpl_dseg'),
+            ('tpl_bmask', 'inputnode.tpl_bmask')
         ]),
         (func_preproc_wf, qc_wf, [
-            ('out_node.moco_pars', 'in_node.moco_pars')
+            ('outputnode.moco_pars', 'inputnode.moco_pars')
         ]),
-        (reg_epi2tpl_wf, qc_wf, [
-            ('out_node.tpl_bold_mag_preproc', 'in_node.tpl_bold_mag_preproc'),
-            ('out_node.tpl_sbref_preproc', 'in_node.tpl_bold_sbref'),
-            ('out_node.tpl_seepi_preproc', 'in_node.tpl_mean_seepi'),
-            ('out_node.tpl_b0_rads', 'in_node.tpl_b0_rads')
+        (func_preproc_wf, qc_wf, [
+            ('outputnode.tpl_bold_mag_preproc', 'inputnode.tpl_bold_mag_preproc'),
+            ('outputnode.tpl_seepiref_preproc', 'inputnode.tpl_seepiref_preproc'),
+            ('outputnode.tpl_sbref_preproc', 'inputnode.tpl_sbref_preproc'),
+            ('outputnode.tpl_topup_b0_rads', 'inputnode.tpl_topup_b0_rads')
         ]),
-
-        # Connect melodic workflow
-        (reg_epi2tpl_wf, melodic_wf, [('out_node.tpl_bold_mag_preproc', 'in_node.tpl_bold_mag_preproc')]),
-        (in_node, melodic_wf, [
-            ('tpl_t1w_head', 'in_node.tpl_t1w_head'),
-            ('tpl_bmask', 'in_node.tpl_bmask')
-        ]),
-        (qc_wf, melodic_wf, [('out_node.tpl_bold_tmean', 'in_node.tpl_bold_tmean')]),
 
         # Connect derivatives outputs
-        (in_node, derivatives_wf, [('bold_mag', 'in_node.source_file')]),
+        (inputnode, derivatives_wf, [('bold_mag', 'inputnode.source_file')]),
 
         # Write individual template-space results to derivatives folder
-        (reg_epi2tpl_wf, derivatives_wf, [
-            ('out_node.tpl_bold_mag_preproc', 'in_node.tpl_bold_mag_preproc'),
-            ('out_node.tpl_sbref_preproc', 'in_node.tpl_sbref_preproc'),
-            ('out_node.tpl_seepi_preproc', 'in_node.tpl_seepi_preproc'),
-            ('out_node.tpl_b0_rads', 'in_node.tpl_b0_rads')
+        (func_preproc_wf, derivatives_wf, [
+            ('outputnode.tpl_bold_mag_preproc', 'inputnode.tpl_bold_mag_preproc'),
+            ('outputnode.tpl_bold_phs_preproc', 'inputnode.tpl_bold_phs_preproc'),
+            ('outputnode.tpl_bold_dphi_preproc', 'inputnode.tpl_bold_dphi_preproc'),
+            ('outputnode.tpl_seepiref_preproc', 'inputnode.tpl_seepiref_preproc'),
+            ('outputnode.tpl_sbref_preproc', 'inputnode.tpl_sbref_preproc'),
+            ('outputnode.tpl_topup_b0_rads', 'inputnode.tpl_topup_b0_rads')
         ]),
 
         # Write fsnative surface resampled BOLD to derivatives
-        # (surface_wf, derivatives_wf, ['outputnode.surfaces', 'in_node.']),
+        # (surface_wf, derivatives_wf, ['outputnode.surfaces', 'inputnode.']),
 
         # Write QC results to derivatives folder
         (qc_wf, derivatives_wf, [
-            ('out_node.tpl_bold_tmean', 'in_node.tpl_bold_tmean'),
-            ('out_node.tpl_bold_tsd', 'in_node.tpl_bold_tsd'),
-            ('out_node.tpl_bold_tsfnr', 'in_node.tpl_bold_tsfnr'),
-            ('out_node.tpl_bold_tsfnr_roistats', 'in_node.tpl_bold_tsfnr_roistats'),
-            ('out_node.tpl_dropout', 'in_node.tpl_dropout'),
-            ('out_node.motion_csv', 'in_node.motion_csv')
-        ]),
-
-        # Write MELODIC results to derivatives folder
-        (melodic_wf, derivatives_wf, [
-            ('out_node.out_dir', 'in_node.melodic_out_dir'),
+            ('outputnode.tpl_bold_mag_tmean', 'inputnode.tpl_bold_mag_tmean'),
+            ('outputnode.tpl_bold_mag_tsd', 'inputnode.tpl_bold_mag_tsd'),
+            ('outputnode.tpl_bold_mag_tsfnr', 'inputnode.tpl_bold_mag_tsfnr'),
+            ('outputnode.tpl_bold_mag_tsfnr_roistats', 'inputnode.tpl_bold_mag_tsfnr_roistats'),
+            ('outputnode.tpl_dropout', 'inputnode.tpl_dropout'),
+            ('outputnode.motion_csv', 'inputnode.motion_csv')
         ]),
 
         # Write atlas images and templates to derivatives folder
-        (in_node, derivatives_wf, [
-            ('tpl_t1w_head', 'in_node.tpl_t1w_head'),
-            ('tpl_t2w_head', 'in_node.tpl_t2w_head'),
-            ('tpl_t1w_brain', 'in_node.tpl_t1w_brain'),
-            ('tpl_t2w_brain', 'in_node.tpl_t2w_brain'),
-            ('tpl_pseg', 'in_node.tpl_pseg'),
-            ('tpl_dseg', 'in_node.tpl_dseg'),
-            ('tpl_bmask', 'in_node.tpl_bmask')
+        (inputnode, derivatives_wf, [
+            ('tpl_t1w_head', 'inputnode.tpl_t1w_head'),
+            ('tpl_t2w_head', 'inputnode.tpl_t2w_head'),
+            ('tpl_t1w_brain', 'inputnode.tpl_t1w_brain'),
+            ('tpl_t2w_brain', 'inputnode.tpl_t2w_brain'),
+            ('tpl_pseg', 'inputnode.tpl_pseg'),
+            ('tpl_dseg', 'inputnode.tpl_dseg'),
+            ('tpl_bmask', 'inputnode.tpl_bmask')
         ]),
 
         # Summary report
-        (in_node, summary_report, [
+        (inputnode, summary_report, [
             ('bold_mag', 'source_bold'),
-            ('bold_mag_meta', 'source_bold_meta'),
+            ('bold_meta', 'source_bold_meta'),
             ('tpl_t1w_head', 't1w_head'),
             ('tpl_t2w_head', 't2w_head'),
             ('tpl_dseg', 'labels'),
         ]),
-        (reg_epi2tpl_wf, summary_report, [
-            ('out_node.tpl_seepi_preproc', 'mseepi'),
-            ('out_node.tpl_b0_rads', 'b0_rads'),
+        (func_preproc_wf, summary_report, [
+            ('outputnode.tpl_seepiref_preproc', 'seepiref'),
+            ('outputnode.tpl_sbref_preproc', 'sbref'),
+            ('outputnode.tpl_topup_b0_rads', 'topup_b0_rads'),
         ]),
         (qc_wf, summary_report, [
-            ('out_node.tpl_bold_tmean', 'tmean'),
-            ('out_node.tpl_bold_tsfnr', 'tsfnr'),
-            ('out_node.tpl_dropout', 'dropout'),
-            ('out_node.motion_csv', 'motion_csv')
+            ('outputnode.tpl_bold_mag_tmean', 'tmean'),
+            ('outputnode.tpl_bold_mag_tsfnr', 'tsfnr'),
+            ('outputnode.tpl_dropout', 'dropout'),
+            ('outputnode.motion_csv', 'motion_csv')
         ])
     ])
 
-    # Optional: plot main workflows
+    # Optional melodic ICA
+    if melodic:
 
+        func_wf.connect([
+
+            # Connect melodic workflow
+            (func_preproc_wf, melodic_wf, [('outputnode.tpl_bold_mag_preproc', 'inputnode.tpl_bold_mag_preproc')]),
+            (inputnode, melodic_wf, [
+                ('tpl_t1w_head', 'inputnode.tpl_t1w_head'),
+                ('tpl_bmask', 'inputnode.tpl_bmask')
+            ]),
+            (qc_wf, melodic_wf, [('outputnode.tpl_bold_mag_tmean', 'inputnode.tpl_bold_mag_tmean')]),
+
+            # Write MELODIC results to derivatives folder
+            (melodic_wf, derivatives_wf, [
+                ('outputnode.out_dir', 'inputnode.melodic_out_dir'),
+            ])
+
+        ])
+
+    # Plot main workflows
     graph_dir = "slabpreproc_graphs"
     os.makedirs(graph_dir, exist_ok=True)
 
     func_preproc_wf.write_graph(
         graph2use='colored',
         dotfilename=os.path.join(graph_dir, 'func_preproc_wf.dot')
-    )
-
-    reg_epi2tpl_wf.write_graph(
-        graph2use='colored',
-        dotfilename=os.path.join(graph_dir, 'reg_epi2tpl_wf.dot')
     )
 
     qc_wf.write_graph(

@@ -12,17 +12,17 @@ def build_melodic_wf(tr_s=1.0):
     melodic_wf = pe.Workflow(name='melodic_wf')
 
     # Workflow input node
-    in_node = pe.Node(
+    inputnode = pe.Node(
         pe.utils.IdentityInterface(
             fields=[
                 'tpl_bold_mag_preproc',
-                'tpl_bold_tmean',
+                'tpl_bold_mag_tmean',
                 'tpl_t1w_head',
                 'tpl_bmask',
-                'bold_mag_meta'
+                'bold_meta'
             ]
         ),
-        name='in_node'
+        name='inputnode'
     )
 
     # Melodic brain signal mask
@@ -42,24 +42,24 @@ def build_melodic_wf(tr_s=1.0):
     )
 
     # Workflow output node
-    out_node = pe.Node(
+    outputnode = pe.Node(
         pe.utils.IdentityInterface(
             fields=['out_dir']
         ),
-        name='out_node'
+        name='outputnode'
     )
 
     melodic_wf.connect([
-        (in_node, melmask, [
-            ('tpl_bold_tmean', 'tmean'),
+        (inputnode, melmask, [
+            ('tpl_bold_mag_tmean', 'tmean'),
             ('tpl_bmask', 'bmask')
         ]),
-        (in_node, melodic, [
+        (inputnode, melodic, [
             ('tpl_t1w_head', 'bg_image'),
             ('tpl_bold_mag_preproc', 'in_files'),
         ]),
         (melmask, melodic, [('melmask', 'mask')]),
-        (melodic, out_node, [('out_dir', 'out_dir')])
+        (melodic, outputnode, [('out_dir', 'out_dir')])
     ])
 
     return melodic_wf

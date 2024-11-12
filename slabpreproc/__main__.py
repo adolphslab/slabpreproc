@@ -15,7 +15,7 @@ PLACE  : Caltech Brain Imaging Center
 
 MIT License
 
-Copyright (c) 2022 Mike Tyszka
+Copyright (c) 2024 Mike Tyszka
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -59,6 +59,7 @@ def main():
     parser.add_argument('--ses', required=True, help='Session ID without ses- prefix')
     parser.add_argument('--antsthreads', required=False, type=int, default=2, choices=range(1, 9),
                         help="Max number of threads allowed for ANTs/ITK modules")
+    parser.add_argument('--melodic', action='store_true', default=False, help="Run Melodic ICA")
     parser.add_argument('--debug', action='store_true', default=False, help="Debugging flag")
 
     # Parse command line arguments
@@ -112,6 +113,7 @@ def main():
     print(f'Subject ID       : {subj_id}')
     print(f'Session ID       : {sess_id}')
     print(f'Max ANTs threads : {args.antsthreads}')
+    print(f'Run Melodic ICA  : {args.melodic}')
     print(f'Debug mode       : {args.debug}')
 
     # Get T1 and T2 templates and subcortical labels from templateflow repo
@@ -217,7 +219,13 @@ def main():
 
         # Get BOLD series metadata
         bold_mag_path = bold_mag.path
-        bold_mag_meta = bold_mag.get_metadata()
+        bold_meta = bold_mag.get_metadata()
+
+        # Generate associated phase image pathname
+        bold_phs_path = bold_mag.path.replace('mag', 'phase')
+        if not op.isfile(bold_phs_path):
+            print(f'* {bold_phs_path} does not exist - exiting')
+            sys.exit(1)
 
         # Parse filename keys
         keys = bids.layout.parse_file_entities(bold_mag)
@@ -230,10 +238,7 @@ def main():
         bold_work_dir = op.join(work_dir, bold_stub)
         os.makedirs(bold_work_dir, exist_ok=True)
 
-        #
-        # Find SBRef for this BOLD magnitude image
-        #
-
+        # Find corresponding SBRef mag image
         bids_filter = {
             'datatype': 'func',
             'suffix': 'sbref',
@@ -241,53 +246,68 @@ def main():
             'extension': ['.nii', '.nii.gz'],
             'task': task_id
         }
-        sbref = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        assert len(sbref) > 0, print('No SBRef found for this BOLD series')
+        sbref_mag = layout.get(subject=subj_id, session=sess_id, **bids_filter)
+        assert len(sbref_mag) > 0, print('No SBRef mag image found for this BOLD series')
+
+        # Find corresponding SBRef phase image
+        bids_filter['part'] = 'phase'
+        sbref_phs = layout.get(subject=subj_id, session=sess_id, **bids_filter)
+        assert len(sbref_phs) > 0, print('No SBRef phase image found for this BOLD series')
 
         # SBRef metadata (should only be one)
-        sbref_path = sbref[0].path
-        sbref_meta = sbref[0].get_metadata()
+        # Use the mag image metadata
+        sbref_mag_path = sbref_mag[0].path
+        sbref_phs_path = sbref_phs[0].path
+        sbref_meta = sbref_mag[0].get_metadata()
 
-        #
-        # Find fieldmaps for this BOLD series
-        #
-
+        # Find SE-EPI mag fieldmaps for this (subj, sess, task)
         bids_filter = {
             'datatype': 'fmap',
-            'suffix': 'epi', 'part': 'mag', 'extension': ['.nii', '.nii.gz'],
+            'suffix': 'epi',
+            'part': 'mag',
+            'extension': ['.nii', '.nii.gz'],
             'acquisition': task_id
         }
-        fmaps = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        assert len(fmaps) == 2, 'Fewer than 2 SE-EPI fieldmaps found'
+        seepi_mag = layout.get(subject=subj_id, session=sess_id, **bids_filter)
+        assert len(seepi_mag) >= 2, 'Fewer than 2 SE-EPI mag fieldmaps found'
 
-        # Create fieldmap path and metadata lists
-        fmap_paths = [fmap.path for fmap in fmaps]
-        fmap_metas = [fmap.get_metadata() for fmap in fmaps]
+        # Find associated SE-EPI phase fieldmaps
+        bids_filter['part'] = 'phase'
+        seepi_phs = layout.get(subject=subj_id, session=sess_id, **bids_filter)
+        assert len(seepi_phs) >= 2, 'Fewer than 2 SE-EPI phase fieldmaps found'
+
+        # Create SE-EPI fieldmap path and metadata lists
+        seepi_mag_list = [fm.path for fm in seepi_mag]
+        seepi_phs_list = [fp.path for fp in seepi_phs]
+        seepi_meta_list = [fm.get_metadata() for fm in seepi_mag]
 
         # Build the subcortical QC workflow
-        func_wf = build_func_wf(bold_work_dir, slab_der_dir, bold_mag_meta, args.antsthreads)
+        func_wf = build_func_wf(bold_work_dir, slab_der_dir, bold_meta, args.melodic, args.antsthreads)
 
         # Supply inputs to func_wf
-        func_wf.inputs.in_node.subject_id = subj_id
-        func_wf.inputs.in_node.fs_subjects_dir = fs_subjects_dir
-        func_wf.inputs.in_node.bold_mag = bold_mag_path
-        func_wf.inputs.in_node.bold_mag_meta = bold_mag_meta
-        func_wf.inputs.in_node.sbref = sbref_path
-        func_wf.inputs.in_node.sbref_meta = sbref_meta
-        func_wf.inputs.in_node.seepis = fmap_paths
-        func_wf.inputs.in_node.seepis_meta = fmap_metas
-        func_wf.inputs.in_node.tpl_t1w_head = tpl_t1w_head_path
-        func_wf.inputs.in_node.tpl_t2w_head = tpl_t2w_head_path
-        func_wf.inputs.in_node.tpl_t1w_brain = tpl_t1w_brain_path
-        func_wf.inputs.in_node.tpl_t2w_brain = tpl_t2w_brain_path
-        func_wf.inputs.in_node.tpl_pseg = tpl_pseg_path
-        func_wf.inputs.in_node.tpl_dseg = tpl_dseg_path
-        func_wf.inputs.in_node.tpl_bmask = tpl_bmask_path
-        func_wf.inputs.in_node.fs_t1w_head = fs_t1w_head_path
-        func_wf.inputs.in_node.ses_t2w_head = ses_t2w_head_path
+        func_wf.inputs.inputnode.subject_id = subj_id
+        func_wf.inputs.inputnode.fs_subjects_dir = fs_subjects_dir
+        func_wf.inputs.inputnode.bold_mag = bold_mag_path
+        func_wf.inputs.inputnode.bold_phs = bold_phs_path
+        func_wf.inputs.inputnode.bold_meta = bold_meta
+        func_wf.inputs.inputnode.sbref_mag = sbref_mag_path
+        func_wf.inputs.inputnode.sbref_phs = sbref_phs_path
+        func_wf.inputs.inputnode.sbref_meta = sbref_meta
+        func_wf.inputs.inputnode.seepi_mag_list = seepi_mag_list
+        func_wf.inputs.inputnode.seepi_phs_list = seepi_phs_list
+        func_wf.inputs.inputnode.seepi_meta_list = seepi_meta_list
+        func_wf.inputs.inputnode.tpl_t1w_head = tpl_t1w_head_path
+        func_wf.inputs.inputnode.tpl_t2w_head = tpl_t2w_head_path
+        func_wf.inputs.inputnode.tpl_t1w_brain = tpl_t1w_brain_path
+        func_wf.inputs.inputnode.tpl_t2w_brain = tpl_t2w_brain_path
+        func_wf.inputs.inputnode.tpl_pseg = tpl_pseg_path
+        func_wf.inputs.inputnode.tpl_dseg = tpl_dseg_path
+        func_wf.inputs.inputnode.tpl_bmask = tpl_bmask_path
+        func_wf.inputs.inputnode.fs_t1w_head = fs_t1w_head_path
+        func_wf.inputs.inputnode.ses_t2w_head = ses_t2w_head_path
 
         # Run workflow
-        # Workflow outputs are stored in the BIDS derivatives/slabpreproc folder
+        # Outputs are stored in the BIDS derivatives/slabpreproc folder tree
         func_wf.run()
 
 

@@ -16,6 +16,7 @@ from nipype.interfaces.base import (
     File,
     traits
 )
+
 from ..utils import ReportPDF
 
 """
@@ -62,8 +63,14 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
-    mseepi = File(
-        desc='Mean SEEPI image file',
+    seepiref = File(
+        desc='SE-EPI reference image file',
+        exists=True,
+        mandatory=True
+    )
+
+    sbref = File(
+        desc='Single-band reference image file',
         exists=True,
         mandatory=True
     )
@@ -86,7 +93,7 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
-    b0_rads = File(
+    topup_b0_rads = File(
         desc='TOPUP estimated B0 fieldmap in rad/s',
         exists=True,
         mandatory=True
@@ -112,11 +119,12 @@ class SummaryReport(BaseInterface):
             'T1wHead': self.inputs.t1w_head,
             'T2wHead': self.inputs.t2w_head,
             'Labels': self.inputs.labels,
-            'mSEEPI': self.inputs.mseepi,
+            'SEEPIRef': self.inputs.seepiref,
+            'SBRef': self.inputs.sbref,
             'tMean': self.inputs.tmean,
             'tSFNR': self.inputs.tsfnr,
             'Dropout': self.inputs.dropout,
-            'B0rads': self.inputs.b0_rads,
+            'B0rads': self.inputs.topup_b0_rads,
             'MotionTable': self.inputs.motion_csv,
         }
 

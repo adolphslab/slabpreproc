@@ -1,10 +1,11 @@
-# Slab fMRI Preprocessing Pipeline
+# Complex-valued Slab fMRI Preprocessing Pipeline
 
 * Optimized for partial-brain slab coverage
 * generates basic quality control metrics
 * uses TOPUP for SDC
 * Implemented in nipype
 * Wraps ANTs, AFNI and FSL
+* Expects complex-valued BIDS format BOLD data (part-mag|phase)
 
 ## Feature Requests
 * WIP: support for complex-valued BOLD data
