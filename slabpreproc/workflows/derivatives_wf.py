@@ -56,6 +56,7 @@ def build_derivatives_wf(deriv_dir):
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_part-phase_bold', 'FileType': 'Image'},
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_part-phasediff_bold', 'FileType': 'Image'},
         {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_part-mag_seepi', 'FileType': 'Image'},
+        {'DataType': 'preproc', 'NewSuffix': 'recon-preproc_part-mag_sbref', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tmean_part-mag_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsd_part-mag_bold', 'FileType': 'Image'},
         {'DataType': 'qc', 'NewSuffix': 'recon-tsfnr_part-mag_bold', 'FileType': 'Image'},
