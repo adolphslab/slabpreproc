@@ -11,28 +11,27 @@ DATES  : 2022-09-07 JMT Adapt from motion.py
 """
 
 import os
-import nibabel as nib
 from pathlib import Path
 
+import nibabel as nib
 import numpy as np
 from nipype.interfaces.base import (
     BaseInterface,
     BaseInterfaceInputSpec,
-    traits,
     File,
     TraitedSpec,
 )
 
 
 class DropoutInputSpec(BaseInterfaceInputSpec):
-    epi_ref = File(
+    seepiref = File(
         desc='SE-EPI reference in template space',
         exists=True,
         mandatory=True
     )
 
-    mbold = File(
-        desc='Temporal mean BOLD mag image in template space',
+    sbref = File(
+        desc='BOLD-EPI SBRef in template space',
         mandatory=True,
         exists=True
     )
@@ -57,12 +56,12 @@ class Dropout(BaseInterface):
     def _run_interface(self, runtime):
 
         # Load temporal mean BOLD image
-        mbold_nii = nib.load(self.inputs.mbold)
-        mbold_img = mbold_nii.get_fdata()
+        sbref_nii = nib.load(self.inputs.sbref)
+        sbref_img = sbref_nii.get_fdata()
 
         # Load mean SE-EPI image
-        epi_ref_nii = nib.load(self.inputs.epi_ref)
-        epi_ref_img = epi_ref_nii.get_fdata()
+        seepiref_nii = nib.load(self.inputs.seepiref)
+        seepiref_img = seepiref_nii.get_fdata()
 
         # Load probabilistic brain mask image
         bmask_nii = nib.load(self.inputs.bmask)
@@ -73,11 +72,11 @@ class Dropout(BaseInterface):
         # Create conservative signal mask from mean BOLD and SE-EPI
         # These images may be signal slabs embedded in the larger
         # zero-filled template volume
-        sig_mask = np.logical_and(mbold_img > 0, epi_ref_img > 0)
+        sig_mask = np.logical_and(sbref_img > 0, seepiref_img > 0)
         sig_mask = np.logical_and(sig_mask, brain_mask)
 
         # Calculate masked dropout image
-        dropout_img = mbold_img / (epi_ref_img + 1e-20)
+        dropout_img = sbref_img / (seepiref_img + 1e-20)
 
         # Normalize dropout to median non-zero signal assuming
         # dropout regions account for less than half the brain volume
@@ -94,7 +93,7 @@ class Dropout(BaseInterface):
         dropout_img[not_brain_mask] = 0.0
 
         # Save dropout image
-        dropout_nii = nib.Nifti1Image(dropout_img, affine=mbold_nii.affine)
+        dropout_nii = nib.Nifti1Image(dropout_img, affine=sbref_nii.affine)
         nib.save(dropout_nii, self._gen_outfile_name())
 
         return runtime

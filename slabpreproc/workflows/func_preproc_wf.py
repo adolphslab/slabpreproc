@@ -63,13 +63,13 @@ def build_func_preproc_wf(antsthreads=2):
     dphi = pe.Node(ComplexPhaseDifference(), name='dphi', terminal_output=None)
 
     # Identify SE-EPI fieldmap with same PE direction as BOLD SBRef
-    get_seepi_ref = pe.Node(SEEPIRef(), name='get_seepi_ref')
+    get_seseepiref = pe.Node(SEEPIRef(), name='get_seseepiref')
 
     # Rigid-body pre-align SBRef to SEEPIRef prior to motion correction of BOLD
     # timeseries to SBRef.
-    reg_sbref2seepi = pe.Node(
+    itk_sbref2seepi = pe.Node(
         ants.RegistrationSynQuick(transform_type='r', num_threads=antsthreads),
-        name='reg_sbref2seepi',
+        name='itk_sbref2seepi',
         terminal_output=None
     )
 
@@ -114,9 +114,9 @@ def build_func_preproc_wf(antsthreads=2):
     )
 
     # Average TOPUP unwarped AP/PA mag SE-EPIs
-    epi_uw_ref = pe.Node(
+    seepi_uw_ref = pe.Node(
         fsl.maths.MeanImage(dimension='T', output_type='NIFTI_GZ'),
-        name='epi_uw_ref'
+        name='seepi_uw_ref'
     )
 
     # Estimate rigid body transform from unwarped SE-EPI to session T2w
@@ -129,7 +129,7 @@ def build_func_preproc_wf(antsthreads=2):
 
     # Estimate rigid transform from T2w EPI to session T2w space
     # FLIRT rigid body registration preferred over antsAI for partial brain slab data
-    flirt_epi2anat = pe.Node(
+    flirt_seepi2anat = pe.Node(
         fsl.FLIRT(
             dof=6,
             cost='corratio',
@@ -140,11 +140,11 @@ def build_func_preproc_wf(antsthreads=2):
             searchr_z=[-alpha_max, alpha_max],
             coarse_search=dalpha_coarse,
             fine_search=dalpha_fine,
-            out_matrix_file='tx_epi2anat.mat',
+            out_matrix_file='tx_seepi2anat.mat',
             output_type='NIFTI_GZ',
             terminal_output='none'
         ),
-        name='flirt_epi2anat',
+        name='flirt_seepi2anat',
     )
 
     # Estimate rigid body transform from session T2w to template T2w
@@ -159,29 +159,35 @@ def build_func_preproc_wf(antsthreads=2):
         name='flirt_anat2tpl',
     )
 
-    # Combine EPI-anat and anat-template rigid transforms
-    # Concatenate EPI to anat and anat to tpl rigid transforms
+    # Chain SEEPI2anat and anat2template rigid transforms (FSL/FLIRT)
     flirt_epi2tpl = pe.Node(fsl.ConvertXFM(
         out_file='flirt_epi2tpl.mat',
         concat_xfm=True),
         name='flirt_epi2tpl'
     )
 
-    # Convert EPI-to-template rigid transform to ITK format
-    itk_epi2tpl = pe.Node(c3.C3dAffineTool(fsl2ras=True, itk_transform=True), name='itk_epi2tpl')
+    # Convert SEEPI2template rigid transform to ITK format
+    itk_seepi2tpl = pe.Node(c3.C3dAffineTool(fsl2ras=True, itk_transform=True), name='itk_seepi2tpl')
 
-    # Make list from ITK HMC transforms and EPI-to-template transform
+    # Chain SBRef2SEEPI and SEEPI2template transforms (ITK)
+    itk_sbref2tpl = pe.Node(util.Merge(2), name='itk_sbref2tpl', run_without_submitting=True)
+
+    # Create list from ITK HMC transforms and EPI-to-template transform
     # Pass this list to fmriprep ResampleSeries interface (transforms arg)
-    itk_hmc_epi2tpl = pe.Node(util.Merge(2), name='itk_hmc_epi2tpl', run_without_submitting=True)
+    itk_hmc_seepi2tpl = pe.Node(util.Merge(2), name='itk_hmc_seepi2tpl', run_without_submitting=True)
 
-    # Resample B0 fieldmap and EPI reference to template space
+    # Resample B0 fieldmap and EPI references to template space
     resample_topup_b0 = pe.Node(
         ants.ApplyTransforms(num_threads=antsthreads),
         name='resample_topup_b0'
     )
-    resample_epi_ref = pe.Node(
+    resample_seepiref = pe.Node(
         ants.ApplyTransforms(num_threads=antsthreads),
-        name='resample_epi_ref'
+        name='resample_seepiref'
+    )
+    resample_sbref = pe.Node(
+        ResampleSeries(jacobian=True, num_threads=antsthreads),
+        name='resample_sbref'
     )
 
     # Rescale template-space B0 map from Hz to rad/s
@@ -208,8 +214,8 @@ def build_func_preproc_wf(antsthreads=2):
                 'tpl_bold_mag_preproc',
                 'tpl_bold_phs_preproc',
                 'tpl_bold_dphi_preproc',
-                'tpl_sbref_mag_preproc',
-                'tpl_epi_ref_preproc',
+                'tpl_sbref_preproc',
+                'tpl_seepiref_preproc',
                 'tpl_topup_b0_rads',
                 'moco_pars',
             ),
@@ -226,7 +232,7 @@ def build_func_preproc_wf(antsthreads=2):
     func_preproc_wf.connect([
 
         # Extract the first fmap in the list to use as a BOLD to fmap registration reference
-        (inputnode, get_seepi_ref, [
+        (inputnode, get_seseepiref, [
             ('seepi_mag_list', 'seepi_mag_list'),
             ('seepi_meta_list', 'seepi_meta_list'),
             ('sbref_meta', 'sbref_meta')
@@ -243,16 +249,16 @@ def build_func_preproc_wf(antsthreads=2):
         (siemens2rads, dphi, [('out_file', 'phi_w')]),
 
         # Register the SBRef to the SE-EPI with the same PE direction (typically AP)
-        (inputnode, reg_sbref2seepi, [('sbref_mag', 'moving_image')]),
-        (get_seepi_ref, reg_sbref2seepi, [('seepi_mag_ref', 'fixed_image')]),
+        (inputnode, itk_sbref2seepi, [('sbref_mag', 'moving_image')]),
+        (get_seseepiref, itk_sbref2seepi, [('seepi_mag_ref', 'fixed_image')]),
 
         # Estimate HMC transforms of BOLD AP mag volumes to SBRef AP in SE-EPI AP space
         (inputnode, hmc_est, [('bold_mag', 'in_file')]),
-        (reg_sbref2seepi, hmc_est, [('warped_image', 'ref_file')]),
+        (itk_sbref2seepi, hmc_est, [('warped_image', 'ref_file')]),
 
         # Convert MCFLIRT matrix list to single ITK transform file
         (hmc_est, itk_hmc, [('mat_file', 'in_files')]),
-        (reg_sbref2seepi, itk_hmc, [
+        (itk_sbref2seepi, itk_hmc, [
             ('warped_image', 'in_reference'),
             ('warped_image', 'in_source'),
         ]),
@@ -264,69 +270,80 @@ def build_func_preproc_wf(antsthreads=2):
         ]),
 
         # Create T2w EPI mag reference (mean of AP and PA SE-EPIs)
-        (topup_wf, epi_uw_ref, [('outputnode.fmap_ref', 'in_file')]),
+        (topup_wf, seepi_uw_ref, [('outputnode.fmap_ref', 'in_file')]),
 
         # Register EPI T2w  to session T2w
-        (epi_uw_ref, flirt_epi2anat, [('out_file', 'in_file')]),
-        (inputnode, flirt_epi2anat, [('ses_t2w_head', 'reference')]),
+        (seepi_uw_ref, flirt_seepi2anat, [('out_file', 'in_file')]),
+        (inputnode, flirt_seepi2anat, [('ses_t2w_head', 'reference')]),
 
         # Register session T2w to template T2w
         (inputnode, flirt_anat2tpl, [('ses_t2w_head', 'in_file'), ('tpl_t2w_head', 'reference'),]),
 
-        # Merge EPI-anat and anat-template rigid transforms (FSL/FLIRT format)
-        (flirt_epi2anat, flirt_epi2tpl, [('out_matrix_file', 'in_file')]),
+        # Chain SEEPI2anat and anat2template rigid transforms (FSL/FLIRT format)
+        (flirt_seepi2anat, flirt_epi2tpl, [('out_matrix_file', 'in_file')]),
         (flirt_anat2tpl, flirt_epi2tpl, [('out_matrix_file', 'in_file2')]),
 
-        # Convert EPI to template transform from FSL to ITK format
-        (flirt_epi2tpl, itk_epi2tpl, [('out_file', 'transform_file')]),
-        (epi_uw_ref, itk_epi2tpl, [('out_file', 'source_file')]),
-        (inputnode, itk_epi2tpl, [('tpl_t2w_head', 'reference_file')]),
+        # Convert chained SEEPI2template transform from FSL to ITK format
+        (flirt_epi2tpl, itk_seepi2tpl, [('out_file', 'transform_file')]),
+        (seepi_uw_ref, itk_seepi2tpl, [('out_file', 'source_file')]),
+        (inputnode, itk_seepi2tpl, [('tpl_t2w_head', 'reference_file')]),
 
-        # Resample EPI reference to template space
-        (epi_uw_ref, resample_epi_ref, [('out_file', 'input_image')]),
-        (inputnode, resample_epi_ref, [('tpl_t2w_head', 'reference_image')]),
-        (itk_epi2tpl, resample_epi_ref, [('itk_transform', 'transforms')]),
+        # Chain SBRef2SEEPI and SEEPI2template to yield SBRef2Template TX (ITK format)
+        (itk_sbref2seepi, itk_sbref2tpl, [('out_matrix', 'in1')]),
+        (itk_seepi2tpl, itk_sbref2tpl, [('itk_transform', 'in2')]),
 
-        # Resample B0 map (Hz) to template space (for one-shot BOLD resampling)
+        # Resample SE-EPI reference to template space
+        (seepi_uw_ref, resample_seepiref, [('out_file', 'input_image')]),
+        (inputnode, resample_seepiref, [('tpl_t2w_head', 'reference_image')]),
+        (itk_seepi2tpl, resample_seepiref, [('itk_transform', 'transforms')]),
+
+        # Resample SE-EPI B0 map (Hz) to template space (for one-shot BOLD resampling)
         (topup_wf, resample_topup_b0, [('outputnode.fmap', 'input_image')]),
         (inputnode, resample_topup_b0, [('tpl_t2w_head', 'reference_image')]),
-        (itk_epi2tpl, resample_topup_b0, [('itk_transform', 'transforms')]),
+        (itk_seepi2tpl, resample_topup_b0, [('itk_transform', 'transforms')]),
 
         # Rescale template-space B0 map from Hz to rad/s
         (resample_topup_b0, hz2rads, [('output_image', 'in_file')]),
 
         # Make a two-element list of HMC and EPI-to-template ITK transforms
-        (itk_hmc, itk_hmc_epi2tpl, [('out_file', 'in1')]),
-        (itk_epi2tpl, itk_hmc_epi2tpl, [('itk_transform', 'in2')]),
+        (itk_hmc, itk_hmc_seepi2tpl, [('out_file', 'in1')]),
+        (itk_seepi2tpl, itk_hmc_seepi2tpl, [('itk_transform', 'in2')]),
 
         # Extract distortion parameters from BOLD metadata
         (inputnode, dist_pars, [('bold_meta', 'metadata')]),
 
+        # One-shot resample SBRef to template space
+        (inputnode, resample_sbref, [('sbref_mag', 'in_file'), ('tpl_t2w_head', 'ref_file')]),
+        (resample_topup_b0, resample_sbref, [('output_image', 'fieldmap')]),
+        (itk_sbref2tpl, resample_sbref, [('out', 'transforms')]),
+        (dist_pars, resample_sbref, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
+
         # One-shot resample BOLD mag timeseries to template space
         (inputnode, resample_bold_mag, [('bold_mag', 'in_file'), ('tpl_t2w_head', 'ref_file')]),
         (resample_topup_b0, resample_bold_mag, [('output_image', 'fieldmap')]),
-        (itk_hmc_epi2tpl, resample_bold_mag, [('out', 'transforms')]),
+        (itk_hmc_seepi2tpl, resample_bold_mag, [('out', 'transforms')]),
         (dist_pars, resample_bold_mag, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
 
         # One-shot resample BOLD phase timeseries to template space
         (lap_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
         (inputnode, resample_bold_phs, [('tpl_t2w_head', 'ref_file')]),
         (resample_topup_b0, resample_bold_phs, [('output_image', 'fieldmap')]),
-        (itk_hmc_epi2tpl, resample_bold_phs, [('out', 'transforms')]),
+        (itk_hmc_seepi2tpl, resample_bold_phs, [('out', 'transforms')]),
         (dist_pars, resample_bold_phs, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir')]),
 
-        # One-shot resample BOLD phase timeseries to template space
+        # One-shot resample BOLD phase difference timeseries to template space
         (dphi, resample_bold_dphi, [('dphi', 'in_file')]),
         (inputnode, resample_bold_dphi, [('tpl_t2w_head', 'ref_file')]),
         (resample_topup_b0, resample_bold_dphi, [('output_image', 'fieldmap')]),
-        (itk_hmc_epi2tpl, resample_bold_dphi, [('out', 'transforms')]),
+        (itk_hmc_seepi2tpl, resample_bold_dphi, [('out', 'transforms')]),
         (dist_pars, resample_bold_dphi, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir')]),
 
         # Output results
         (resample_bold_mag, outputnode, [('out_file', 'tpl_bold_mag_preproc')]),
         (resample_bold_phs, outputnode, [('out_file', 'tpl_bold_phs_preproc')]),
         (resample_bold_dphi, outputnode, [('out_file', 'tpl_bold_dphi_preproc')]),
-        (resample_epi_ref, outputnode, [('output_image', 'tpl_epi_ref_preproc')]),
+        (resample_seepiref, outputnode, [('output_image', 'tpl_seepiref_preproc')]),
+        (resample_sbref, outputnode, [('out_file', 'tpl_sbref_preproc')]),
         (hz2rads, outputnode, [('out_file', 'tpl_topup_b0_rads')]),
         (hmc_est, outputnode, [('par_file', 'moco_pars')]),
     ])

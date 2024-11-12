@@ -148,7 +148,8 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthread
         ]),
         (func_preproc_wf, qc_wf, [
             ('outputnode.tpl_bold_mag_preproc', 'inputnode.tpl_bold_mag_preproc'),
-            ('outputnode.tpl_epi_ref_preproc', 'inputnode.tpl_epi_ref_preproc'),
+            ('outputnode.tpl_seepiref_preproc', 'inputnode.tpl_seepiref_preproc'),
+            ('outputnode.tpl_sbref_preproc', 'inputnode.tpl_sbref_preproc'),
             ('outputnode.tpl_topup_b0_rads', 'inputnode.tpl_topup_b0_rads')
         ]),
 
@@ -160,7 +161,8 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthread
             ('outputnode.tpl_bold_mag_preproc', 'inputnode.tpl_bold_mag_preproc'),
             ('outputnode.tpl_bold_phs_preproc', 'inputnode.tpl_bold_phs_preproc'),
             ('outputnode.tpl_bold_dphi_preproc', 'inputnode.tpl_bold_dphi_preproc'),
-            ('outputnode.tpl_epi_ref_preproc', 'inputnode.tpl_epi_ref_preproc'),
+            ('outputnode.tpl_seepiref_preproc', 'inputnode.tpl_seepiref_preproc'),
+            ('outputnode.tpl_sbref_preproc', 'inputnode.tpl_sbref_preproc'),
             ('outputnode.tpl_topup_b0_rads', 'inputnode.tpl_topup_b0_rads')
         ]),
 
@@ -197,7 +199,8 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthread
             ('tpl_dseg', 'labels'),
         ]),
         (func_preproc_wf, summary_report, [
-            ('outputnode.tpl_epi_ref_preproc', 'mseepi'),
+            ('outputnode.tpl_seepiref_preproc', 'seepiref'),
+            ('outputnode.tpl_sbref_preproc', 'sbref'),
             ('outputnode.tpl_topup_b0_rads', 'topup_b0_rads'),
         ]),
         (qc_wf, summary_report, [

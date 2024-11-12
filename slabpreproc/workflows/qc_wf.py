@@ -8,14 +8,13 @@ AUTHOR : Mike Tyszka
 PLACE  : Caltech
 """
 
-import nipype.interfaces.fsl as fsl
+import nipype.algorithms.confounds as confounds
 import nipype.interfaces.afni as afni
 import nipype.interfaces.utility as util
-import nipype.algorithms.confounds as confounds
 import nipype.pipeline.engine as pe
 
-from ..interfaces.motion import Motion
 from ..interfaces.dropout import Dropout
+from ..interfaces.motion import Motion
 
 
 def build_qc_wf():
@@ -28,7 +27,8 @@ def build_qc_wf():
         util.IdentityInterface(
             fields=[
                 'tpl_bold_mag_preproc',
-                'tpl_epi_ref_preproc',
+                'tpl_seepiref_preproc',
+                'tpl_sbref_preproc',
                 'tpl_topup_b0_rads',
                 'tpl_bmask',
                 'tpl_dseg',
@@ -105,9 +105,9 @@ def build_qc_wf():
         (inputnode, bold_tsfnr_roistats, [('tpl_dseg', 'mask')]),
 
         # Estimated region dropout from SBRef and mean SE-EPI
-        (bold_tsfnr, est_dropout, [('mean_file', 'mbold')]),
         (inputnode, est_dropout, [
-            ('tpl_epi_ref_preproc', 'epi_ref'),
+            ('tpl_sbref_preproc', 'sbref'),
+            ('tpl_seepiref_preproc', 'seepiref'),
             ('tpl_bmask', 'bmask')
         ]),
 
