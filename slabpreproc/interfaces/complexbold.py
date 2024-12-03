@@ -193,18 +193,22 @@ class ComplexPhaseDifference(BaseInterface):
         z_0 = mag[..., 0] * np.exp(1j * phi_w[..., 0])
         nonzero = np.abs(z_0) > 0.0
 
+        # Calculate temporal phase difference with first volume by complex division
         dphi = np.zeros_like(phi_w)
-
         nt = mag.shape[3]
         for tc in range(nt):
             z_t = mag[nonzero, tc] * np.exp(1j * phi_w[nonzero, tc])
             dphi[nonzero, tc] = np.angle(z_t / z_0[nonzero])
 
+        # Zero out NaNs
         dphi[np.isnan(dphi)] = 0.0
 
-        # Save unwrapped phase image (radians)
-        dphi_nii = nib.Nifti1Image(dphi, affine=mag_nii.affine)
-        nib.save(dphi_nii, self._gen_dphi_fname())
+        # Temporally phase unwrap
+        dphi_uw = np.unwrap(dphi, axis=3)
+
+        # Save unwrapped temporal phase difference image (radians)
+        dphi_uw_nii = nib.Nifti1Image(dphi_uw, affine=mag_nii.affine)
+        nib.save(dphi_uw_nii, self._gen_dphi_fname())
 
         return runtime
 
