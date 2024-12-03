@@ -64,9 +64,9 @@ class Pol2Cart(BaseInterface):
         bold_re, bold_im = np.real(bold_z), np.imag(bold_z)
 
         # Save cartesian complex BOLD image
-        bold_re_nii = nib.Nifti1Image(bold_re, affine=bold_mag_nii.affine)
+        bold_re_nii = nib.Nifti1Image(bold_re, affine=bold_mag_nii.affine, header=bold_mag_nii.header)
         nib.save(bold_re_nii, self._gen_real_fname())
-        bold_im_nii = nib.Nifti1Image(bold_im, affine=bold_mag_nii.affine)
+        bold_im_nii = nib.Nifti1Image(bold_im, affine=bold_mag_nii.affine, header=bold_mag_nii.header)
         nib.save(bold_im_nii, self._gen_imag_fname())
 
         return runtime
@@ -132,9 +132,9 @@ class Cart2Pol(BaseInterface):
         bold_mag, bold_phs_rad = np.abs(bold_z), np.angle(bold_z, deg=False)
 
         # Save polar complex BOLD image
-        bold_mag_nii = nib.Nifti1Image(bold_mag, affine=bold_re_nii.affine)
+        bold_mag_nii = nib.Nifti1Image(bold_mag, affine=bold_re_nii.affine, header=bold_re_nii.header)
         nib.save(bold_mag_nii, self._gen_mag_fname())
-        bold_phs_rad_nii = nib.Nifti1Image(bold_phs_rad, affine=bold_re_nii.affine)
+        bold_phs_rad_nii = nib.Nifti1Image(bold_phs_rad, affine=bold_re_nii.affine, header=bold_re_nii.header)
         nib.save(bold_phs_rad_nii, self._gen_phs_rad_fname())
 
         return runtime
@@ -207,7 +207,7 @@ class ComplexPhaseDifference(BaseInterface):
         dphi_uw = np.unwrap(dphi, axis=3)
 
         # Save unwrapped temporal phase difference image (radians)
-        dphi_uw_nii = nib.Nifti1Image(dphi_uw, affine=mag_nii.affine)
+        dphi_uw_nii = nib.Nifti1Image(dphi_uw, affine=phi_w_nii.affine, header=phi_w_nii.header)
         nib.save(dphi_uw_nii, self._gen_dphi_fname())
 
         return runtime

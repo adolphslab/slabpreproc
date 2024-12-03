@@ -93,7 +93,7 @@ class Dropout(BaseInterface):
         dropout_img[not_brain_mask] = 0.0
 
         # Save dropout image
-        dropout_nii = nib.Nifti1Image(dropout_img, affine=sbref_nii.affine)
+        dropout_nii = nib.Nifti1Image(dropout_img, affine=sbref_nii.affine, header=sbref_nii.header)
         nib.save(dropout_nii, self._gen_outfile_name())
 
         return runtime
