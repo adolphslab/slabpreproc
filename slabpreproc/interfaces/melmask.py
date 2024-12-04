@@ -7,14 +7,13 @@ DATES  : 2023-02-13 JMT Adapt from dropout.py
 """
 
 import os
-import nibabel as nib
 from pathlib import Path
 
+import nibabel as nib
 import numpy as np
 from nipype.interfaces.base import (
     BaseInterface,
     BaseInterfaceInputSpec,
-    traits,
     File,
     TraitedSpec,
 )
@@ -69,7 +68,7 @@ class MelMask(BaseInterface):
         melmask_img = np.logical_and(tmean_mask, brain_mask).astype(np.uint8)
 
         # Save melodic brain signal mask
-        melmask_nii = nib.Nifti1Image(melmask_img, affine=tmean_nii.affine)
+        melmask_nii = nib.Nifti1Image(melmask_img, affine=tmean_nii.affine, header=tmean_nii.header)
         nib.save(melmask_nii, self._gen_outfile_name())
 
         return runtime

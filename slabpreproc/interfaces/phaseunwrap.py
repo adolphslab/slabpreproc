@@ -50,7 +50,7 @@ class LapUnwrap(BaseInterface):
         phi_uw = lapuw.unwrap()
 
         # Save unwrapped phase image (radians)
-        phi_uw_nii = nib.Nifti1Image(phi_uw, affine=phi_w_nii.affine)
+        phi_uw_nii = nib.Nifti1Image(phi_uw, affine=phi_w_nii.affine, header=phi_w_nii.header)
         nib.save(phi_uw_nii, self._gen_phi_uw_fname())
 
         return runtime
