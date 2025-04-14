@@ -262,7 +262,10 @@ def main():
             'acquisition': task_id
         }
         fmaps = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        assert len(fmaps) == 2, 'Fewer than 2 SE-EPI fieldmaps found'
+        if len(fmaps) < 2:
+            print('* Fewer than 2 SE-EPI fieldmaps found using the following filter:')
+            print(bids_filter)
+            raise RuntimeError('Too few fieldmaps found')
 
         # Create fieldmap path and metadata lists
         fmap_paths = [fmap.path for fmap in fmaps]
