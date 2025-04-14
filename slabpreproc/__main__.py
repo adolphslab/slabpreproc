@@ -261,7 +261,7 @@ def main():
         sbref_meta = sbref_mag[0].get_metadata()
 
         fmaps = layout.get_fieldmap(bold_mag_path, return_list=True)
-        assert len(fmaps > 0), print('No fieldmaps intended for this BOLD image were found')
+        assert len(fmaps) > 0, print('No fieldmaps intended for this BOLD image were found')
 
         # Sort associated fmaps into mag and phase path lists and capture mag SE-EPI metadata for TOPUP
         seepi_mag_list = []
