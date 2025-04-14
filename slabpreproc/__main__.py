@@ -260,34 +260,31 @@ def main():
         sbref_phs_path = sbref_phs[0].path
         sbref_meta = sbref_mag[0].get_metadata()
 
-        # Find SE-EPI mag fieldmaps for this (subj, sess, task)
-        bids_filter = {
-            'datatype': 'fmap',
-            'suffix': 'epi',
-            'part': 'mag',
-            'extension': ['.nii', '.nii.gz'],
-            'acquisition': task_id
-        }
-        seepi_mag = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        if len(seepi_mag) < 2:
-            print('* Fewer than 2 SE-EPI fieldmaps found using the following filter:')
-            print(bids_filter)
-            raise RuntimeError('Too few magnitude fieldmaps found')
+        fmaps = layout.get_fieldmap(bold_mag_path, return_list=True)
+        assert len(fmaps > 0), print('No fieldmaps intended for this BOLD image were found')
 
-        # Find associated SE-EPI phase fieldmaps
-        bids_filter['part'] = 'phase'
-        seepi_phs = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        if len(seepi_phs) < 2:
-            print('* Fewer than 2 SE-EPI fieldmaps found using the following filter:')
-            print(bids_filter)
-            raise RuntimeError('Too few phase fieldmaps found')
+        # Sort associated fmaps into mag and phase path lists and capture mag SE-EPI metadata for TOPUP
+        seepi_mag_list = []
+        seepi_phs_list = []
+        seepi_meta_list = []
 
-        # Create SE-EPI fieldmap path and metadata lists
-        seepi_mag_list = [fm.path for fm in seepi_mag]
-        seepi_phs_list = [fp.path for fp in seepi_phs]
-        seepi_meta_list = [fm.get_metadata() for fm in seepi_mag]
+        for fmap in fmaps:
+            
+            # Grab the fieldmap pathname from structure returned by get_fieldmap
+            fmap_pname = fmap['epi']
+        
+            if 'part-mag' in fmap_pname:
+                seepi_mag_list.append(fmap_pname)
 
-        # Build the subcortical QC workflow
+                # Capture SE-EPI metadata from magnitude images only
+                # Get the BIDSFile object from the mag fieldmap pathname
+                fm = layout.get_file(fmap_pname)
+                seepi_meta_list.append(fm.get_metadata())
+            
+            if 'part-phase' in fmap_pname:
+                seepi_phs_list.append(fmap_pname)
+
+        # Build the slab fMRI workflow
         func_wf = build_func_wf(bold_work_dir, slab_der_dir, bold_meta, args.melodic, args.antsthreads)
 
         # Supply inputs to func_wf
