@@ -269,12 +269,18 @@ def main():
             'acquisition': task_id
         }
         seepi_mag = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        assert len(seepi_mag) >= 2, 'Fewer than 2 SE-EPI mag fieldmaps found'
+        if len(seepi_mag) < 2:
+            print('* Fewer than 2 SE-EPI fieldmaps found using the following filter:')
+            print(bids_filter)
+            raise RuntimeError('Too few magnitude fieldmaps found')
 
         # Find associated SE-EPI phase fieldmaps
         bids_filter['part'] = 'phase'
         seepi_phs = layout.get(subject=subj_id, session=sess_id, **bids_filter)
-        assert len(seepi_phs) >= 2, 'Fewer than 2 SE-EPI phase fieldmaps found'
+        if len(seepi_phs) < 2:
+            print('* Fewer than 2 SE-EPI fieldmaps found using the following filter:')
+            print(bids_filter)
+            raise RuntimeError('Too few phase fieldmaps found')
 
         # Create SE-EPI fieldmap path and metadata lists
         seepi_mag_list = [fm.path for fm in seepi_mag]
