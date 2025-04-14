@@ -1,11 +1,6 @@
-setuptools~=71.0.4
+setuptools~=72.1.0
 numpy~=1.26.3
-scipy~=1.13.1
-scikit-image~=0.23.2
+scipy~=1.14.0
 nibabel~=5.2.0
-reportlab~=4.2.2
-nipype~=1.8.4
-templateflow~=24.2.0
-niworkflows~=1.10.0
-matplotlib~=3.8.0
+matplotlib~=3.9.1
 pandas~=2.2.2

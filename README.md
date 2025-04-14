@@ -1,15 +1,12 @@
 # Complex-valued Slab fMRI Preprocessing Pipeline
 
 * Optimized for partial-brain slab coverage
-* generates basic quality control metrics
-* uses TOPUP for SDC
+* Support complex-valued EPI data (mag/phase)
+* Generates basic quality control metrics
+* Uses TOPUP for SDC
 * Implemented in nipype
 * Wraps ANTs, AFNI and FSL
 * Expects complex-valued BIDS format BOLD data (part-mag|phase)
-
-## Feature Requests
-* WIP: support for complex-valued BOLD data
-
 
 ## Test Data
 A pared-down dataset derived from the original DenseAmy dataset can be found here:
