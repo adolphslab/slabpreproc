@@ -46,7 +46,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='2025.04.14',  # Required
+    version='2025.5.14',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
@@ -198,8 +198,8 @@ setup(
     # maintainers, and where to support the project financially. The key is
     # what's used to render the link text on PyPI.
     project_urls={  # Optional
-        'Bug Reports': 'https://github.com/jmtyszka/scqc/issues',
+        'Bug Reports': 'https://github.com/jmtyszka/slabpreproc/issues',
         'Funding': 'http://chen.caltech.edu/',
-        'Source': 'https://github.com/jmtyszka/scqc/',
+        'Source': 'https://github.com/jmtyszka/slabpreproc/',
     },
 )
