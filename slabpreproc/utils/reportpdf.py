@@ -247,7 +247,7 @@ class ReportPDF:
         self._add_montage(img_name='tMean', title='Temporal mean BOLD', colormap='gray', zlims=zlims)
 
         self._section_title('Fieldmaps', page_break=True)
-        self._add_montage(img_name='B0rads', title='TOPUP B0 Fieldmap (rad/s)', colormap='seismic', zlims=zlims)
+        self._add_montage(img_name='B0Hz', title='TOPUP B0 Fieldmap (Hz)', colormap='seismic', zlims=zlims)
 
         self._section_title('Quality Control', page_break=True)
         self._add_montage(img_name='tSFNR', title='Temporal SFNR', colormap='gnuplot2', zlims=zlims)

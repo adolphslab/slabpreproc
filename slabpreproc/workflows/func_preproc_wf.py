@@ -9,12 +9,14 @@ import nipype.interfaces.fsl as fsl
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
 import numpy as np
+
 # fMRIprep (24.2.0) interfaces for one-shot resampling
 from fmriprep.interfaces.resampling import (ResampleSeries, DistortionParameters)
 # niworkflows MCFLIRT to ITK conversion
 from niworkflows.interfaces.itk import MCFLIRT2ITK
-# sdcflows TOPUP workflow
-from sdcflows.workflows.fit.pepolar import init_topup_wf
+
+# Slabpreproc workflows
+from ..workflows.topup_wf import build_topup_wf
 
 # Slabpreproc interfaces
 from ..interfaces import (TOPUPEncFile, LapUnwrap, ComplexPhaseDifference, SEEPIRef)
@@ -62,9 +64,6 @@ def build_func_preproc_wf(antsthreads=2):
     # Complex phase difference with first volume (radians)
     dphi = pe.Node(ComplexPhaseDifference(), name='dphi', terminal_output=None)
 
-    # Identify SE-EPI fieldmap with same PE direction as BOLD SBRef
-    get_seseepiref = pe.Node(SEEPIRef(), name='get_seseepiref')
-
     # Rigid-body pre-align SBRef to SEEPIRef prior to motion correction of BOLD
     # timeseries to SBRef.
     itk_sbref2seepi = pe.Node(
@@ -72,14 +71,6 @@ def build_func_preproc_wf(antsthreads=2):
         name='itk_sbref2seepi',
         terminal_output=None
     )
-
-    # Create an encoding file for SE-EPI fmap correction with TOPUP
-    # Use the corrected output from this node as a T2w intermediate reference
-    # for registering the unwarped BOLD EPI slab space to the individual T2w template
-    seepi_enc_file = pe.Node(TOPUPEncFile(), name='seepi_enc_file')
-
-    # Create an encoding file for SBRef and BOLD correction with TOPUP
-    sbref_enc_file = pe.Node(TOPUPEncFile(), name='sbref_enc_file')
 
     # HMC of warped BOLD series using the warped, fmap-aligned SBRef as reference
     # See FMRIB tech report for relative cost function performance
@@ -107,17 +98,12 @@ def build_func_preproc_wf(antsthreads=2):
         name='dist_pars'
     )
 
-    # Setup TOPUP SDC workflow
-    topup_wf = init_topup_wf(
-        name='topup_wf',
-        omp_nthreads=1
-    )
+    # Identify warped SE-EPI fieldmap with same PE direction as warped SBRef
+    # Used to calculate the rigid transform from SBRef to SE-EPI spaces for HMC and SDC
+    get_seepi_ref = pe.Node(SEEPIRef(), name='get_seepi_ref')
 
-    # Average TOPUP unwarped AP/PA mag SE-EPIs
-    seepi_uw_ref = pe.Node(
-        fsl.maths.MeanImage(dimension='T', output_type='NIFTI_GZ'),
-        name='seepi_uw_ref'
-    )
+    # Setup TOPUP SDC workflow
+    topup_wf = build_topup_wf(antsthreads=2)
 
     # Estimate rigid body transform from unwarped SE-EPI to session T2w
 
@@ -176,10 +162,10 @@ def build_func_preproc_wf(antsthreads=2):
     # Pass this list to fmriprep ResampleSeries interface (transforms arg)
     itk_hmc_seepi2tpl = pe.Node(util.Merge(2), name='itk_hmc_seepi2tpl', run_without_submitting=True)
 
-    # Resample B0 fieldmap and EPI references to template space
-    resample_topup_b0 = pe.Node(
+    # Conventional multistep resampling of 3D EPI reference images to individual template space
+    resample_topup_b0_hz = pe.Node(
         ants.ApplyTransforms(num_threads=antsthreads),
-        name='resample_topup_b0'
+        name='resample_topup_b0_hz'
     )
     resample_seepiref = pe.Node(
         ants.ApplyTransforms(num_threads=antsthreads),
@@ -190,10 +176,8 @@ def build_func_preproc_wf(antsthreads=2):
         name='resample_sbref'
     )
 
-    # Rescale template-space B0 map from Hz to rad/s
-    hz2rads = pe.Node(fsl.ImageMaths(op_string=f'-mul {2.0 * np.pi}'), name='hz2rads')
-
     # One-shot resample BOLD timeseries to template space (including HMC and SDC)
+    # Only the 4D images are resampled this way using the fmriprep ResampleSeries interface
     resample_bold_mag = pe.Node(
         ResampleSeries(jacobian=True, num_threads=antsthreads),
         name='resample_bold_mag'
@@ -216,7 +200,7 @@ def build_func_preproc_wf(antsthreads=2):
                 'tpl_bold_dphi_preproc',
                 'tpl_sbref_preproc',
                 'tpl_seepiref_preproc',
-                'tpl_topup_b0_rads',
+                'tpl_topup_b0_hz',
                 'moco_pars',
             ),
         ),
@@ -231,13 +215,6 @@ def build_func_preproc_wf(antsthreads=2):
 
     func_preproc_wf.connect([
 
-        # Extract the first fmap in the list to use as a BOLD to fmap registration reference
-        (inputnode, get_seseepiref, [
-            ('seepi_mag_list', 'seepi_mag_list'),
-            ('seepi_meta_list', 'seepi_meta_list'),
-            ('sbref_meta', 'sbref_meta')
-        ]),
-
         # Convert BOLD phase from Siemens units to radians
         (inputnode, siemens2rads, [('bold_phs', 'in_file')]),
 
@@ -248,9 +225,16 @@ def build_func_preproc_wf(antsthreads=2):
         (inputnode, dphi, [('bold_mag', 'mag')]),
         (siemens2rads, dphi, [('out_file', 'phi_w')]),
 
+        # Identify the SE-EPI fieldmap with the same PE direction as the BOLD series
+        (inputnode, get_seepi_ref, [
+            ('seepi_mag_list', 'seepi_mag_list'),
+            ('seepi_meta_list', 'seepi_meta_list'),
+            ('sbref_meta', 'sbref_meta')
+        ]),
+
         # Register the SBRef to the SE-EPI with the same PE direction (typically AP)
         (inputnode, itk_sbref2seepi, [('sbref_mag', 'moving_image')]),
-        (get_seseepiref, itk_sbref2seepi, [('seepi_mag_ref', 'fixed_image')]),
+        (get_seepi_ref, itk_sbref2seepi, [('seepi_mag_ref', 'fixed_image')]),
 
         # Estimate HMC transforms of BOLD AP mag volumes to SBRef AP in SE-EPI AP space
         (inputnode, hmc_est, [('bold_mag', 'in_file')]),
@@ -265,15 +249,12 @@ def build_func_preproc_wf(antsthreads=2):
 
         # Estimate TOPUP warp correction from SE-EPI pair
         (inputnode, topup_wf, [
-            ('seepi_mag_list', 'inputnode.in_data'),
-            ('seepi_meta_list', 'inputnode.metadata'),
+            ('seepi_mag_list', 'in_node.seepi_mag_list'),
+            ('seepi_meta_list', 'in_node.seepi_meta_list'),
         ]),
 
-        # Create T2w EPI mag reference (mean of AP and PA SE-EPIs)
-        (topup_wf, seepi_uw_ref, [('outputnode.fmap_ref', 'in_file')]),
-
-        # Register EPI T2w  to session T2w
-        (seepi_uw_ref, flirt_seepi2anat, [('out_file', 'in_file')]),
+        # Register unwarped T2w SEEPI  to session T2w SPACE
+        (topup_wf, flirt_seepi2anat, [('out_node.seepi_uw_ref', 'in_file')]),
         (inputnode, flirt_seepi2anat, [('ses_t2w_head', 'reference')]),
 
         # Register session T2w to template T2w
@@ -285,7 +266,7 @@ def build_func_preproc_wf(antsthreads=2):
 
         # Convert chained SEEPI2template transform from FSL to ITK format
         (flirt_epi2tpl, itk_seepi2tpl, [('out_file', 'transform_file')]),
-        (seepi_uw_ref, itk_seepi2tpl, [('out_file', 'source_file')]),
+        (topup_wf, itk_seepi2tpl, [('out_node.seepi_uw_ref', 'source_file')]),
         (inputnode, itk_seepi2tpl, [('tpl_t2w_head', 'reference_file')]),
 
         # Chain SBRef2SEEPI and SEEPI2template to yield SBRef2Template TX (ITK format)
@@ -293,17 +274,14 @@ def build_func_preproc_wf(antsthreads=2):
         (itk_seepi2tpl, itk_sbref2tpl, [('itk_transform', 'in2')]),
 
         # Resample SE-EPI reference to template space
-        (seepi_uw_ref, resample_seepiref, [('out_file', 'input_image')]),
+        (topup_wf, resample_seepiref, [('out_node.seepi_uw_ref', 'input_image')]),
         (inputnode, resample_seepiref, [('tpl_t2w_head', 'reference_image')]),
         (itk_seepi2tpl, resample_seepiref, [('itk_transform', 'transforms')]),
 
-        # Resample SE-EPI B0 map (Hz) to template space (for one-shot BOLD resampling)
-        (topup_wf, resample_topup_b0, [('outputnode.fmap', 'input_image')]),
-        (inputnode, resample_topup_b0, [('tpl_t2w_head', 'reference_image')]),
-        (itk_seepi2tpl, resample_topup_b0, [('itk_transform', 'transforms')]),
-
-        # Rescale template-space B0 map from Hz to rad/s
-        (resample_topup_b0, hz2rads, [('output_image', 'in_file')]),
+        # Resample SE-EPI B0 map (rad/s) to template space (for one-shot BOLD resampling)
+        (topup_wf, resample_topup_b0_hz, [('out_node.topup_b0_hz', 'input_image')]),
+        (inputnode, resample_topup_b0_hz, [('tpl_t2w_head', 'reference_image')]),
+        (itk_seepi2tpl, resample_topup_b0_hz, [('itk_transform', 'transforms')]),
 
         # Make a two-element list of HMC and EPI-to-template ITK transforms
         (itk_hmc, itk_hmc_seepi2tpl, [('out_file', 'in1')]),
@@ -314,27 +292,27 @@ def build_func_preproc_wf(antsthreads=2):
 
         # One-shot resample SBRef to template space
         (inputnode, resample_sbref, [('sbref_mag', 'in_file'), ('tpl_t2w_head', 'ref_file')]),
-        (resample_topup_b0, resample_sbref, [('output_image', 'fieldmap')]),
+        (resample_topup_b0_hz, resample_sbref, [('output_image', 'fieldmap')]),
         (itk_sbref2tpl, resample_sbref, [('out', 'transforms')]),
         (dist_pars, resample_sbref, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
 
         # One-shot resample BOLD mag timeseries to template space
         (inputnode, resample_bold_mag, [('bold_mag', 'in_file'), ('tpl_t2w_head', 'ref_file')]),
-        (resample_topup_b0, resample_bold_mag, [('output_image', 'fieldmap')]),
+        (resample_topup_b0_hz, resample_bold_mag, [('output_image', 'fieldmap')]),
         (itk_hmc_seepi2tpl, resample_bold_mag, [('out', 'transforms')]),
         (dist_pars, resample_bold_mag, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir'),]),
 
         # One-shot resample BOLD phase timeseries to template space
         (lap_unwrap, resample_bold_phs, [('phi_uw', 'in_file')]),
         (inputnode, resample_bold_phs, [('tpl_t2w_head', 'ref_file')]),
-        (resample_topup_b0, resample_bold_phs, [('output_image', 'fieldmap')]),
+        (resample_topup_b0_hz, resample_bold_phs, [('output_image', 'fieldmap')]),
         (itk_hmc_seepi2tpl, resample_bold_phs, [('out', 'transforms')]),
         (dist_pars, resample_bold_phs, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir')]),
 
         # One-shot resample BOLD phase difference timeseries to template space
         (dphi, resample_bold_dphi, [('dphi', 'in_file')]),
         (inputnode, resample_bold_dphi, [('tpl_t2w_head', 'ref_file')]),
-        (resample_topup_b0, resample_bold_dphi, [('output_image', 'fieldmap')]),
+        (resample_topup_b0_hz, resample_bold_dphi, [('output_image', 'fieldmap')]),
         (itk_hmc_seepi2tpl, resample_bold_dphi, [('out', 'transforms')]),
         (dist_pars, resample_bold_dphi, [('readout_time', 'ro_time'), ('pe_direction', 'pe_dir')]),
 
@@ -344,7 +322,7 @@ def build_func_preproc_wf(antsthreads=2):
         (resample_bold_dphi, outputnode, [('out_file', 'tpl_bold_dphi_preproc')]),
         (resample_seepiref, outputnode, [('output_image', 'tpl_seepiref_preproc')]),
         (resample_sbref, outputnode, [('out_file', 'tpl_sbref_preproc')]),
-        (hz2rads, outputnode, [('out_file', 'tpl_topup_b0_rads')]),
+        (resample_topup_b0_hz, outputnode, [('output_image', 'tpl_topup_b0_hz')]),
         (hmc_est, outputnode, [('par_file', 'moco_pars')]),
     ])
 

@@ -9,6 +9,7 @@ PLACE  : Caltech
 """
 
 import nipype.algorithms.confounds as confounds
+import nipype.interfaces.fsl as fsl
 import nipype.interfaces.afni as afni
 import nipype.interfaces.utility as util
 import nipype.pipeline.engine as pe
@@ -29,7 +30,7 @@ def build_qc_wf():
                 'tpl_bold_mag_preproc',
                 'tpl_seepiref_preproc',
                 'tpl_sbref_preproc',
-                'tpl_topup_b0_rads',
+                'tpl_topup_b0_hz',
                 'tpl_bmask',
                 'tpl_dseg',
                 'moco_pars',
@@ -45,6 +46,19 @@ def build_qc_wf():
             regress_poly=2,  # Quadratic detrending
         ),
         name='bold_tsfnr'
+    )
+
+    bmask_bin = pe.Node(
+        fsl.maths.MathsCommand(
+            args='-thr 0.5 -bin',
+        ),
+        name='bmask_thresh'
+    )
+
+    # Brain mask the tSFNR image
+    tsfnr_bmask = pe.Node(
+        fsl.maths.ApplyMask(),
+        name='tsfnr_bmask'
     )
 
     # FD and LPF FD from FSL motion parameters
@@ -86,6 +100,7 @@ def build_qc_wf():
                 'tpl_bold_mag_tmean',
                 'tpl_bold_mag_tsd',
                 'tpl_bold_mag_tsfnr',
+                'tpl_bold_mag_detrended',
                 'tpl_bold_mag_tsfnr_roistats',
                 'tpl_dropout',
                 'motion_csv'
@@ -97,8 +112,20 @@ def build_qc_wf():
     # QC workflow setup
     qc_wf = pe.Workflow(name='qc_wf')
 
+
+
+
     qc_wf.connect([
+
+        # Calculate tSFNR from BOLD image
         (inputnode, bold_tsfnr, [('tpl_bold_mag_preproc', 'in_file')]),
+
+        # Binarize brain mask at p > 0.5
+        (inputnode, bmask_bin, [('tpl_bmask', 'in_file')]),
+
+        # Apply brain mask to tSFNR image
+        (bold_tsfnr, tsfnr_bmask, [('tsnr_file', 'in_file')]),
+        (bmask_bin, tsfnr_bmask, [('out_file', 'mask_file')]),
 
         # Pass tSFNR and labels to ROI stats
         (bold_tsfnr, bold_tsfnr_roistats, [('tsnr_file', 'in_file')]),
@@ -120,8 +147,9 @@ def build_qc_wf():
         # Return all stats images
         (bold_tsfnr, outputnode, [('mean_file', 'tpl_bold_mag_tmean')]),
         (bold_tsfnr, outputnode, [('stddev_file', 'tpl_bold_mag_tsd')]),
-        (bold_tsfnr, outputnode, [('tsnr_file', 'tpl_bold_mag_tsfnr')]),
+        (bold_tsfnr, outputnode, [('detrended_file', 'tpl_bold_mag_detrended')]),
         (bold_tsfnr_roistats, outputnode, [('out_file', 'tpl_bold_mag_tsfnr_roistats')]),
+        (tsfnr_bmask, outputnode, [('out_file', 'tpl_bold_mag_tsfnr')]),
         (est_dropout, outputnode, [('dropout', 'tpl_dropout')]),
         (build_motion_table, outputnode, [('motion_csv', 'motion_csv')])
     ])

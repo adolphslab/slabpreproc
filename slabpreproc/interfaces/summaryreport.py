@@ -93,8 +93,8 @@ class SummaryReportInputSpec(BaseInterfaceInputSpec):
         mandatory=True
     )
 
-    topup_b0_rads = File(
-        desc='TOPUP estimated B0 fieldmap in rad/s',
+    topup_b0_hz = File(
+        desc='TOPUP estimated B0 fieldmap in Hz',
         exists=True,
         mandatory=True
     )
@@ -124,7 +124,7 @@ class SummaryReport(BaseInterface):
             'tMean': self.inputs.tmean,
             'tSFNR': self.inputs.tsfnr,
             'Dropout': self.inputs.dropout,
-            'B0rads': self.inputs.topup_b0_rads,
+            'B0Hz': self.inputs.topup_b0_hz,
             'MotionTable': self.inputs.motion_csv,
         }
 
