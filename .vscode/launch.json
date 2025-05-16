@@ -4,14 +4,13 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        
         {
             "name": "Python Debugger: slabpreproc",
             "type": "debugpy",
             "request": "launch",
             "module": "slabpreproc.__main__",
             "cwd": "/Users/jmt/sandbox/slabpreproc_complex",
-            "args": "-d . --sub Damy001 --ses 1",
+            "args": "-d . --sub Damy001 --ses 1 -w ../work",
         }
     ]
 }

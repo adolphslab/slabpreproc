@@ -150,7 +150,7 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthread
             ('outputnode.tpl_bold_mag_preproc', 'inputnode.tpl_bold_mag_preproc'),
             ('outputnode.tpl_seepiref_preproc', 'inputnode.tpl_seepiref_preproc'),
             ('outputnode.tpl_sbref_preproc', 'inputnode.tpl_sbref_preproc'),
-            ('outputnode.tpl_topup_b0_rads', 'inputnode.tpl_topup_b0_rads')
+            ('outputnode.tpl_topup_b0_hz', 'inputnode.tpl_topup_b0_hz')
         ]),
 
         # Connect derivatives outputs
@@ -163,7 +163,7 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthread
             ('outputnode.tpl_bold_dphi_preproc', 'inputnode.tpl_bold_dphi_preproc'),
             ('outputnode.tpl_seepiref_preproc', 'inputnode.tpl_seepiref_preproc'),
             ('outputnode.tpl_sbref_preproc', 'inputnode.tpl_sbref_preproc'),
-            ('outputnode.tpl_topup_b0_rads', 'inputnode.tpl_topup_b0_rads')
+            ('outputnode.tpl_topup_b0_hz', 'inputnode.tpl_topup_b0_hz')
         ]),
 
         # Write fsnative surface resampled BOLD to derivatives
@@ -201,7 +201,7 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthread
         (func_preproc_wf, summary_report, [
             ('outputnode.tpl_seepiref_preproc', 'seepiref'),
             ('outputnode.tpl_sbref_preproc', 'sbref'),
-            ('outputnode.tpl_topup_b0_rads', 'topup_b0_rads'),
+            ('outputnode.tpl_topup_b0_hz', 'topup_b0_hz'),
         ]),
         (qc_wf, summary_report, [
             ('outputnode.tpl_bold_mag_tmean', 'tmean'),
