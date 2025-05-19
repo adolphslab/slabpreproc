@@ -1,4 +1,4 @@
-setuptools~=71.0.4
+setuptools~=80.7.1
 numpy~=1.26.3
 scipy~=1.13.1
 scikit-image~=0.23.2
