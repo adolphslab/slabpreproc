@@ -174,6 +174,7 @@ def build_func_wf(bold_work_dir, deriv_dir, bold_meta, melodic=False, antsthread
             ('outputnode.tpl_bold_mag_tmean', 'inputnode.tpl_bold_mag_tmean'),
             ('outputnode.tpl_bold_mag_tsd', 'inputnode.tpl_bold_mag_tsd'),
             ('outputnode.tpl_bold_mag_tsfnr', 'inputnode.tpl_bold_mag_tsfnr'),
+            ('outputnode.tpl_bold_mag_detrended', 'inputnode.tpl_bold_mag_detrended'),
             ('outputnode.tpl_bold_mag_tsfnr_roistats', 'inputnode.tpl_bold_mag_tsfnr_roistats'),
             ('outputnode.tpl_dropout', 'inputnode.tpl_dropout'),
             ('outputnode.motion_csv', 'inputnode.motion_csv')
