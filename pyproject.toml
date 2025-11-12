@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "slabpreproc"
+version = "2025.11.12"
+license = "MIT"
+description = "Slab fMRI Preprocessing Pipeline"
+readme = "README.md"
+requires-python = ">=3.10, <4"
+authors = [
+    { name = "Julian Michael Tyszka", email = "jmt@caltech.edu" },
+]
+keywords = [
+    "brain",
+    "fMRI",
+    "neuroimaging",
+    "quality",
+    "subcortical",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+dependencies = []
+
+[project.scripts]
+slabpreproc = "slabpreproc.__main__:main"
+
+[project.urls]
+"Bug Reports" = "https://github.com/jmtyszka/slabpreproc/issues"
+Funding = "http://chen.caltech.edu/"
+Homepage = "https://github.com/jmtyszka/slabpreproc"
+Source = "https://github.com/jmtyszka/slabpreproc/"
+
+[tool.hatch.version]
+path = "slabpreproc/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/slabpreproc",
+]

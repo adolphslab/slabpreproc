@@ -89,6 +89,8 @@ class DerivativesSorter(BaseInterface):
         keys = bids.layout.parse_file_entities(source_fname)
         subj_id = keys['subject']
         sess_id = keys['session']
+        task_id = keys['task']
+        run_no = keys.get('run', '1')
         old_suffix = keys['suffix']
         old_ext = keys['extension']
 

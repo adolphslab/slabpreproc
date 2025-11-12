@@ -13,10 +13,11 @@ DATES
 2019-05-28 JMT Recode as a nipype interface class
 2019-05-29 JMT Expand to multiple pages
 2022-09-07 JMT Adapt for slabpreproc
+2025-11-12 JMT Add run-level reporting within sessions
 
 MIT License
 
-Copyright (c) 2022 Mike Tyszka
+Copyright (c) 2025 Mike Tyszka
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -82,7 +83,7 @@ class ReportPDF:
 
         # Get BIDS keys from BOLD filename
         keys = bids.layout.parse_file_entities(self._report_files['SourceBOLD'])
-        subj_id, sess_id, task_id = keys['subject'], keys['session'], keys['task']
+        subj_id, sess_id, task_id, run_no = keys['subject'], keys['session'], keys['task'], keys.get('run', '1')
 
         # Load header info from BOLD Nifti file
         bold_nii = nib.load(self._report_files['SourceBOLD'])
@@ -92,11 +93,12 @@ class ReportPDF:
         self._metadata['Subject'] = subj_id
         self._metadata['Session'] = sess_id
         self._metadata['Task'] = task_id
+        self._metadata['Run'] = run_no
         self._metadata['MatrixSize'] = bold_hdr.get_data_shape()
         self._metadata['VoxelSize'] = bold_hdr.get_zooms()[:3]
 
         # General prefix
-        self._prefix = f'sub-{subj_id}_ses-{sess_id}_task-{task_id}'
+        self._prefix = f'sub-{subj_id}_ses-{sess_id}_task-{task_id}_run-{run_no}'
 
         # Build report PDF filename
         self._report_pdf_fname = op.join(report_dir, f'{self._prefix}_report.pdf')
