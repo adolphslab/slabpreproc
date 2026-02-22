@@ -1,58 +1,16 @@
 # Complex-valued Slab fMRI Preprocessing Pipeline
 
-* Optimized for partial-brain slab coverage
+* optimized for partial-brain slab coverage
 * generates basic quality control metrics
-* uses TOPUP for SDC
-* Implemented in nipype
-* Wraps ANTs, AFNI and FSL
-* Expects complex-valued BIDS format BOLD data (part-mag|phase)
+* optional melodic ICA
+* magnitude TOPUP susceptibility distortion correction
+* nipype pipeline wrapping ANTs, AFNI and FSL and fMRIPrep functions
+* expects complex-valued BIDS format BOLD data (part-mag|phase)
+* requires individual T1w images for each subject as a [custom templateflow template](https://www.templateflow.org/python-client/master/contributing_tutorials/adding_a_new_template.html)
 
-## Feature Requests
-* WIP: support for complex-valued BOLD data
+## Example Data
+An example dataset containing both raw and preprocessed complex-valued slab fMRI data can be found in the OpenNeuro ds006479 repository at
+[https://openneuro.org/datasets/ds006947](https://openneuro.org/datasets/ds006947/)
+This dataset consists of passive movie watching fMRI in 15 sessions from three healthy adults.
 
-
-## Test Data
-A pared-down dataset derived from the original DenseAmy dataset can be found here:
-
-`HPC:/central/groups/adolphslab/DenseAmygdala/DenseAmyTest`
-
-The test dataset contains single sessions from two subjects with truncated BOLD series.
-
-### Test Data Structure
-
-```
-DenseAmyTest/
-├── CHANGES
-├── code
-│   ├── bids_bold_info.py
-│   ├── bids_fmap_correction_wenying.py
-│   ├── bidskit.job
-│   ├── bids_metadata.csv
-│   ├── bids_metadata.py
-│   ├── date_subj_sess_map.csv
-│   ├── fmriprep.job
-│   ├── logs
-│   ├── mriqc.job
-│   ├── populate_sourcedata.log
-│   ├── populate_sourcedata.py
-│   ├── Protocol_Translator.json
-│   ├── slabpreproc.job
-│   └── subj_sess_list.txt
-├── dataset_description.json
-├── derivatives
-├── exclude
-├── participants.json
-├── participants.tsv
-├── README
-├── sub-Damy001
-│   └── ses-1
-│       ├── anat
-│       ├── fmap
-│       └── func
-├── sub-Damy003
-│   └── ses-1
-│       ├── anat
-│       ├── fmap
-│       └── func
-└── work
-```
+## Example BIDS derivatives output
